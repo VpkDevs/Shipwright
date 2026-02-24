@@ -16,10 +16,17 @@ const generateSchema = z.object({
   description: z.string().optional(),
 });
 
+/**
+ * POST /api/generate
+ *
+ * Returns FREE template-based generation (no AI, no payment required).
+ * This is the "preview" tier — shows users what they'd get so they want
+ * to upgrade to AI generation via POST /api/agent.
+ */
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user || !(session.user as any).accessToken) {
+  if (!session?.user || !(session.user as { accessToken?: string }).accessToken) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,7 +34,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { owner, repo, description } = generateSchema.parse(body);
 
-    const token = (session.user as any).accessToken;
+    const token = (session.user as { accessToken?: string }).accessToken!;
     const analyzer = new RepoAnalyzer(token);
 
     const analysis = await analyzer.analyze(owner, repo);
@@ -38,6 +45,8 @@ export async function POST(request: Request) {
       envTemplate: generateEnvTemplate(analysis),
       readme: generateReadme(repo, analysis, description),
       landingPage: generateLandingPage(repo, analysis, description),
+      /** Flag so the UI knows this is template-based, not AI */
+      isAI: false,
     };
 
     return Response.json(generated);
