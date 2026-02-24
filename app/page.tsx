@@ -123,12 +123,18 @@ export default function Home() {
             pages in minutes.
           </p>
 
-          <div className="flex gap-4 justify-center">
+          <div className="flex gap-4 justify-center flex-col sm:flex-row">
             <a
               href="/api/auth/signin/github"
               className="btn-primary px-8 py-3 text-lg"
             >
               Sign In with GitHub
+            </a>
+            <a
+              href="/api/auth/signin/credentials?token=dev-mode-active"
+              className="btn-secondary px-8 py-3 text-lg"
+            >
+              Dev Login (Test Mode)
             </a>
             <a
               href="#features"
