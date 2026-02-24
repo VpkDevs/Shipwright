@@ -44,3 +44,55 @@ export interface PRCreatePayload {
     content: string;
   }>;
 }
+
+// ─── Agent Types ────────────────────────────────────────────────────────────
+
+export type AgentStepStatus = "pending" | "running" | "done" | "error";
+
+export interface AgentStep {
+  id: string;
+  label: string;
+  status: AgentStepStatus;
+  detail?: string;
+}
+
+export interface AgentToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  result?: string;
+}
+
+export interface AgentResult {
+  analysis: RepoAnalysis;
+  aiReadme: string;
+  aiLandingPage: string;
+  vercelJson: string;
+  packageJsonScripts: Record<string, string>;
+  envTemplate: string;
+  deploymentRecommendations: string[];
+  steps: AgentStep[];
+  provider: "openai" | "blackbox" | "template";
+}
+
+// ─── Payment / Billing Types ─────────────────────────────────────────────────
+
+export type PlanType = "none" | "credit" | "pro";
+
+export interface PaymentStatus {
+  plan: PlanType;
+  /** Remaining one-time ship credits */
+  credits: number;
+  /** ISO date string for Pro subscription expiry */
+  proExpiresAt?: string;
+  stripeCustomerId?: string;
+}
+
+export interface CheckoutSessionRequest {
+  priceId: string;
+  /** owner/repo being shipped — stored in metadata */
+  repoFullName?: string;
+}
+
+export interface CheckoutSessionResponse {
+  url: string;
+}
