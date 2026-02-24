@@ -149,63 +149,110 @@ export default function Home() {
           <h3 className="text-3xl font-bold text-center mb-12">Features</h3>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="card">
-              <div className="text-4xl mb-3">🔍</div>
-              <h4 className="text-lg font-semibold mb-2">Repo Analysis</h4>
+              <div className="text-4xl mb-3">🤖</div>
+              <h4 className="text-lg font-semibold mb-2">AI Code Analysis</h4>
               <p className="text-slate-400">
-                Automatically detect your framework, dependencies, and
-                deployment requirements.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">⚡</div>
-              <h4 className="text-lg font-semibold mb-2">Config Generation</h4>
-              <p className="text-slate-400">
-                Generate Vercel configs, environment templates, and deployment
-                scripts automatically.
+                Blackbox AI reads your actual source files to understand your
+                codebase — not just package.json.
               </p>
             </div>
 
             <div className="card">
               <div className="text-4xl mb-3">📝</div>
-              <h4 className="text-lg font-semibold mb-2">Documentation</h4>
+              <h4 className="text-lg font-semibold mb-2">AI README</h4>
               <p className="text-slate-400">
-                Get production-ready READMEs and landing pages generated from
-                your repo.
+                GPT-4o-mini generates a professional README from your real code,
+                not a generic template.
               </p>
             </div>
 
             <div className="card">
-              <div className="text-4xl mb-3">🚀</div>
-              <h4 className="text-lg font-semibold mb-2">PR Ready</h4>
+              <div className="text-4xl mb-3">🎨</div>
+              <h4 className="text-lg font-semibold mb-2">Landing Page Copy</h4>
               <p className="text-slate-400">
-                All changes packaged into a single pull request for your
-                review.
+                AI-written headlines and feature bullets that actually describe
+                what your project does.
               </p>
             </div>
 
             <div className="card">
-              <div className="text-4xl mb-3">✅</div>
-              <h4 className="text-lg font-semibold mb-2">Deploy Button</h4>
+              <div className="text-4xl mb-3">⚙️</div>
+              <h4 className="text-lg font-semibold mb-2">Vercel Config</h4>
               <p className="text-slate-400">
-                One-click deployment to Vercel with all configurations ready.
+                Production-ready vercel.json with correct framework settings,
+                build commands, and env vars.
+              </p>
+            </div>
+
+            <div className="card">
+              <div className="text-4xl mb-3">📬</div>
+              <h4 className="text-lg font-semibold mb-2">One-Click PR</h4>
+              <p className="text-slate-400">
+                All generated files committed to a new branch and opened as a
+                pull request automatically.
               </p>
             </div>
 
             <div className="card">
               <div className="text-4xl mb-3">⏱️</div>
-              <h4 className="text-lg font-semibold mb-2">15 Minutes</h4>
+              <h4 className="text-lg font-semibold mb-2">Under 2 Minutes</h4>
               <p className="text-slate-400">
-                From repo to live URL in under 15 minutes. That&apos;s the goal.
+                From repo selection to PR-ready deployment configs in under
+                2 minutes.
               </p>
             </div>
           </div>
         </div>
 
+        {/* Pricing Preview */}
+        <div className="mt-24" id="pricing">
+          <h3 className="text-3xl font-bold text-center mb-4">Simple Pricing</h3>
+          <p className="text-slate-400 text-center mb-12">
+            No free tier — every ship is AI-powered and worth it.
+          </p>
+          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <div className="card border border-slate-700">
+              <p className="text-slate-400 text-sm mb-1">Ship Credit</p>
+              <p className="text-4xl font-bold mb-1">$5</p>
+              <p className="text-slate-500 text-sm mb-4">one-time · 1 repo</p>
+              <ul className="text-sm text-slate-400 space-y-1 mb-6">
+                <li>✓ AI README generation</li>
+                <li>✓ Blackbox code analysis</li>
+                <li>✓ Vercel config + env template</li>
+                <li>✓ One-click PR creation</li>
+              </ul>
+              <a href="/api/auth/signin/github" className="btn-secondary w-full text-center block text-sm">
+                Get Started
+              </a>
+            </div>
+            <div className="card border-2 border-blue-500 relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-semibold">
+                Best Value
+              </span>
+              <p className="text-blue-400 text-sm mb-1">Pro Monthly</p>
+              <p className="text-4xl font-bold mb-1">$15</p>
+              <p className="text-slate-500 text-sm mb-4">/month · 30 ships</p>
+              <ul className="text-sm text-slate-400 space-y-1 mb-6">
+                <li>✓ Everything in Ship Credit</li>
+                <li>✓ 30 AI ships per month</li>
+                <li>✓ Priority processing</li>
+                <li>✓ Cancel anytime</li>
+              </ul>
+              <a href="/api/auth/signin/github" className="btn-primary w-full text-center block text-sm">
+                Start Pro
+              </a>
+            </div>
+          </div>
+          <p className="text-center mt-6">
+            <a href="/pricing" className="text-blue-400 hover:underline text-sm">
+              View full pricing details →
+            </a>
+          </p>
+        </div>
+
         <div className="mt-20 text-center">
           <p className="text-slate-400 mb-6">
-            Shipwright is built for solo builders and indie developers who want
-            to ship fast.
+            Built for solo builders and indie developers who want to ship fast.
           </p>
           <a
             href="/api/auth/signin/github"
