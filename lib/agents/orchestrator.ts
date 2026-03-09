@@ -8,6 +8,7 @@ import {
   generateVercelJsonFile,
   generatePackageJsonScripts,
 } from "@/lib/generators/vercel-config";
+import type { Logger } from "@/lib/logger";
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ export interface OrchestratorOptions {
   description?: string;
   /** Called on each agent step for real-time UI updates */
   onStep?: (step: AgentStep) => void;
+  /** Optional structured logger for observability & traceability */
+  logger?: Logger;
 }
 
 /**
@@ -32,12 +35,16 @@ export interface OrchestratorOptions {
 export async function runOrchestrator(
   options: OrchestratorOptions
 ): Promise<AgentResult> {
-  const { owner, repo, githubToken, description, onStep } = options;
+  const { owner, repo, githubToken, description, onStep, logger } = options;
 
   const steps: AgentStep[] = [];
   let stepCounter = 0;
 
-  const addStep = (label: string, status: AgentStep["status"] = "running", detail?: string): AgentStep => {
+  const addStep = (
+    label: string,
+    status: AgentStep["status"] = "running",
+    detail?: string
+  ): AgentStep => {
     const step: AgentStep = {
       id: String(++stepCounter),
       label,
@@ -61,21 +68,45 @@ export async function runOrchestrator(
     onStep?.(step);
   };
 
+  const orchestratorLogger = logger?.child({
+    component: "orchestrator",
+    owner,
+    repo,
+  });
+
   // ── Step 1: Static Analysis ──────────────────────────────────────────────
   const analysisStep = addStep("Analyzing repository structure");
+  orchestratorLogger?.info("Starting repository analysis");
 
   let analysis: RepoAnalysis;
   try {
     const analyzer = new RepoAnalyzer(githubToken);
     analysis = await analyzer.analyze(owner, repo);
-    completeStep(analysisStep, `${analysis.framework} · Risk: ${analysis.deploymentRiskScore}%`);
+    completeStep(
+      analysisStep,
+      `${analysis.framework} · Risk: ${analysis.deploymentRiskScore}%`
+    );
+    orchestratorLogger?.info("Repository analysis completed", {
+      framework: analysis.framework,
+      packageManager: analysis.packageManager,
+      backendType: analysis.backendType,
+      deploymentRiskScore: analysis.deploymentRiskScore,
+    });
   } catch (err) {
-    failStep(analysisStep, String(err));
-    throw new Error(`Repository analysis failed: ${String(err)}`);
+    const message = String(err);
+    failStep(analysisStep, message);
+    orchestratorLogger?.error(
+      "Repository analysis failed",
+      { owner, repo },
+      err
+    );
+    throw new Error(`Repository analysis failed: ${message}`);
   }
 
   // ── Step 2: Blackbox AI — Code Analysis & Config Generation ─────────────
   const blackboxStep = addStep("Blackbox AI: Deep code analysis");
+  const blackboxLogger = orchestratorLogger?.child({ step: "blackbox" });
+  blackboxLogger?.info("Starting Blackbox AI step");
 
   let blackboxResult = null;
   try {
@@ -88,15 +119,25 @@ export async function runOrchestrator(
         blackboxStep.label = label;
         if (detail) blackboxStep.detail = detail;
         onStep?.(blackboxStep);
-      }
+      },
+      blackboxLogger
     );
     completeStep(blackboxStep, "Config & env template generated");
+    blackboxLogger?.info("Blackbox AI step completed");
   } catch (err) {
-    failStep(blackboxStep, `Falling back to templates: ${String(err)}`);
+    const message = String(err);
+    failStep(blackboxStep, `Falling back to templates: ${message}`);
+    blackboxLogger?.error(
+      "Blackbox AI step failed, will fall back to templates where needed",
+      undefined,
+      err
+    );
   }
 
   // ── Step 3: OpenAI — README & Landing Page ───────────────────────────────
   const openaiStep = addStep("OpenAI: Generating README & landing page");
+  const openaiLogger = orchestratorLogger?.child({ step: "openai" });
+  openaiLogger?.info("Starting OpenAI step");
 
   let openaiResult = null;
   try {
@@ -109,11 +150,19 @@ export async function runOrchestrator(
         openaiStep.label = label;
         if (detail) openaiStep.detail = detail;
         onStep?.(openaiStep);
-      }
+      },
+      openaiLogger
     );
     completeStep(openaiStep, "README & landing page ready");
+    openaiLogger?.info("OpenAI step completed");
   } catch (err) {
-    failStep(openaiStep, `Falling back to templates: ${String(err)}`);
+    const message = String(err);
+    failStep(openaiStep, `Falling back to templates: ${message}`);
+    openaiLogger?.error(
+      "OpenAI step failed, will fall back to templates where needed",
+      undefined,
+      err
+    );
   }
 
   // ── Step 4: Merge Results ────────────────────────────────────────────────
@@ -131,8 +180,7 @@ export async function runOrchestrator(
 
   // README: prefer OpenAI, fall back to template
   const aiReadme =
-    openaiResult?.readme ||
-    generateReadme(repo, analysis, description);
+    openaiResult?.readme || generateReadme(repo, analysis, description);
 
   // Landing page: build from OpenAI copy or fall back to template
   const aiLandingPage = buildLandingPage(
@@ -144,13 +192,11 @@ export async function runOrchestrator(
 
   // Vercel config: prefer Blackbox AI, fall back to static generator
   const vercelJson =
-    blackboxResult?.vercelConfig ||
-    generateVercelJsonFile(analysis);
+    blackboxResult?.vercelConfig || generateVercelJsonFile(analysis);
 
   // Env template: prefer Blackbox AI, fall back to static generator
   const envTemplate =
-    blackboxResult?.envTemplate ||
-    generateEnvTemplate(analysis);
+    blackboxResult?.envTemplate || generateEnvTemplate(analysis);
 
   // Package scripts: prefer Blackbox AI suggestions, fall back to static
   const packageJsonScripts =
@@ -164,6 +210,9 @@ export async function runOrchestrator(
     buildDefaultRecommendations(analysis);
 
   completeStep(mergeStep, `Generated via ${provider}`);
+  orchestratorLogger?.info("Orchestrator finished assembling final output", {
+    provider,
+  });
 
   return {
     analysis,
@@ -198,7 +247,7 @@ function buildLandingPage(
     try {
       copy = JSON.parse(landingPageCopyJson) as LandingCopy;
     } catch {
-      // ignore parse errors
+      // ignore parse errors and fall back to defaults
     }
   }
 
@@ -302,16 +351,24 @@ function buildDefaultRecommendations(analysis: RepoAnalysis): string[] {
   const recs: string[] = [];
 
   if (analysis.missingConfigs.includes("build script")) {
-    recs.push(`Add a build script to package.json: "build": "${analysis.framework === "Next.js" ? "next build" : "vite build"}"`);
+    recs.push(
+      `Add a build script to package.json: "build": "${
+        analysis.framework === "Next.js" ? "next build" : "vite build"
+      }"`
+    );
   }
   if (analysis.envVarsDetected.length > 0) {
-    recs.push(`Configure ${analysis.envVarsDetected.length} environment variable(s) in your deployment platform`);
+    recs.push(
+      `Configure ${analysis.envVarsDetected.length} environment variable(s) in your deployment platform`
+    );
   }
   if (!analysis.hasDocker) {
     recs.push("Consider adding a Dockerfile for containerized deployments");
   }
   if (analysis.deploymentRiskScore > 50) {
-    recs.push("High risk score detected — review missing configurations before deploying");
+    recs.push(
+      "High risk score detected — review missing configurations before deploying"
+    );
   }
 
   while (recs.length < 3) {

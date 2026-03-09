@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { RepoAnalysis } from "@/types";
 import { GitHubClient } from "@/lib/github";
+import type { Logger } from "@/lib/logger";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -39,8 +40,7 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
         properties: {
           path: {
             type: "string",
-            description:
-              "Directory path to list (use '' or '/' for root)",
+            description: "Directory path to list (use '' or '/' for root)",
           },
         },
         required: ["path"],
@@ -56,26 +56,44 @@ async function executeTool(
   args: Record<string, string>,
   github: GitHubClient,
   owner: string,
-  repo: string
+  repo: string,
+  logger?: Logger
 ): Promise<string> {
   try {
     if (name === "read_repo_file") {
-      const content = await github.getFileContent(owner, repo, args.path);
-      if (!content) return `File not found: ${args.path}`;
-      // Truncate large files to save tokens
-      return content.length > 3000 ? content.slice(0, 3000) + "\n...[truncated]" : content;
+      const path = args.path;
+      logger?.debug("OpenAI tool: read_repo_file", { path });
+      const content = await github.getFileContent(owner, repo, path);
+      if (!content) {
+        logger?.warn("OpenAI tool: file not found", { path });
+        return `File not found: ${path}`;
+      }
+      const truncated =
+        content.length > 3000
+          ? content.slice(0, 3000) + "\n...[truncated]"
+          : content;
+      return truncated;
     }
 
     if (name === "list_repo_files") {
-      const contents = await github.getRepoContents(owner, repo, args.path || "");
-      if (!contents || !Array.isArray(contents)) return "Directory not found or empty";
+      const path = args.path || "";
+      logger?.debug("OpenAI tool: list_repo_files", { path });
+      const contents = await github.getRepoContents(owner, repo, path);
+      if (!contents || !Array.isArray(contents)) {
+        logger?.warn("OpenAI tool: directory not found or empty", { path });
+        return "Directory not found or empty";
+      }
       return contents
-        .map((f: { type: string; path: string }) => `${f.type === "dir" ? "📁" : "📄"} ${f.path}`)
+        .map((f: { type: string; path: string }) =>
+          `${f.type === "dir" ? "📁" : "📄"} ${f.path}`
+        )
         .join("\n");
     }
 
+    logger?.warn("OpenAI tool: unknown tool requested", { name });
     return "Unknown tool";
   } catch (err) {
+    logger?.error("OpenAI tool execution error", undefined, err);
     return `Tool error: ${String(err)}`;
   }
 }
@@ -94,9 +112,11 @@ export async function runOpenAIAgent(
   repo: string,
   analysis: RepoAnalysis,
   githubToken: string,
-  onStep?: (label: string, detail?: string) => void
+  onStep?: (label: string, detail?: string) => void,
+  logger?: Logger
 ): Promise<OpenAIAgentResult> {
   const github = new GitHubClient(githubToken);
+  const agentLogger = logger?.child({ agent: "openai", owner, repo });
 
   const systemPrompt = `You are Shipwright AI, an expert developer assistant that helps ship GitHub repositories to production.
 
@@ -134,6 +154,10 @@ Start by exploring the repo structure, then read 1-2 key files.`,
   ];
 
   onStep?.("Connecting to OpenAI", "Using gpt-4o-mini");
+  agentLogger?.info("Starting OpenAI agent run", {
+    framework: analysis.framework,
+    backendType: analysis.backendType,
+  });
 
   let iterations = 0;
   const maxIterations = 8;
@@ -141,14 +165,24 @@ Start by exploring the repo structure, then read 1-2 key files.`,
   while (iterations < maxIterations) {
     iterations++;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      tools,
-      tool_choice: "auto",
-      max_tokens: 2000,
-      temperature: 0.7,
-    });
+    let response: OpenAI.Chat.ChatCompletion;
+    try {
+      response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages,
+        tools,
+        tool_choice: "auto",
+        max_tokens: 2000,
+        temperature: 0.7,
+      });
+    } catch (err) {
+      agentLogger?.error("OpenAI chat completion failed", undefined, err);
+      onStep?.(
+        "OpenAI error",
+        "Falling back to template-based README and copy"
+      );
+      return generateFallbackResult(analysis, repo);
+    }
 
     const message = response.choices[0].message;
     messages.push(message);
@@ -156,6 +190,7 @@ Start by exploring the repo structure, then read 1-2 key files.`,
     // No more tool calls — we have the final answer
     if (!message.tool_calls || message.tool_calls.length === 0) {
       onStep?.("OpenAI generation complete", "Parsing response");
+      agentLogger?.info("OpenAI agent returned final message");
       return parseAgentResponse(message.content || "", analysis, repo);
     }
 
@@ -167,18 +202,25 @@ Start by exploring the repo structure, then read 1-2 key files.`,
         function: { name: string; arguments: string };
       };
 
-      const args = JSON.parse(fnCall.function.arguments) as Record<string, string>;
+      const args = JSON.parse(
+        fnCall.function.arguments
+      ) as Record<string, string>;
       onStep?.(
         `Reading ${args.path || "repo files"}`,
         `Tool: ${fnCall.function.name}`
       );
+      agentLogger?.debug("Executing OpenAI tool call", {
+        tool: fnCall.function.name,
+        path: args.path,
+      });
 
       const result = await executeTool(
         fnCall.function.name,
         args,
         github,
         owner,
-        repo
+        repo,
+        agentLogger
       );
 
       messages.push({
@@ -189,19 +231,23 @@ Start by exploring the repo structure, then read 1-2 key files.`,
     }
   }
 
+  agentLogger?.warn(
+    "OpenAI agent reached max iterations, using fallback result"
+  );
   // Fallback if max iterations reached
   return generateFallbackResult(analysis, repo);
 }
 
 // ─── Response Parser ──────────────────────────────────────────────────────────
 
-function parseAgentResponse(
+export function parseAgentResponse(
   content: string,
   analysis: RepoAnalysis,
   repoName: string
 ): OpenAIAgentResult {
   // Extract README section
-  const readmeMatch = content.match(/```markdown\n([\s\S]*?)```/i) ||
+  const readmeMatch =
+    content.match(/```markdown\n([\s\S]*?)```/i) ||
     content.match(/# .+[\s\S]*/);
   const readme = readmeMatch
     ? readmeMatch[1] || readmeMatch[0]
@@ -213,12 +259,17 @@ function parseAgentResponse(
   const featuresMatch = content.match(/features?[:\s\[]+([^\]]+)/i);
 
   const landingPageCopy = JSON.stringify({
-    headline: headlineMatch?.[1]?.trim() || `Ship ${repoName} to production`,
+    headline:
+      headlineMatch?.[1]?.trim() ||
+      `Ship ${repoName} to production`,
     subheadline:
       subheadlineMatch?.[1]?.trim() ||
       `${analysis.framework} app ready for deployment`,
     features: featuresMatch
-      ? featuresMatch[1].split(/[,\n]/).slice(0, 3).map((f) => f.trim())
+      ? featuresMatch[1]
+          .split(/[,\n]/)
+          .slice(0, 3)
+          .map((f) => f.trim())
       : ["Fast deployment", "Production ready", "Easy configuration"],
   });
 
@@ -243,7 +294,10 @@ function parseAgentResponse(
   };
 }
 
-function generateFallbackReadme(analysis: RepoAnalysis, repoName: string): string {
+function generateFallbackReadme(
+  analysis: RepoAnalysis,
+  repoName: string
+): string {
   return `# ${repoName}
 
 ${analysis.description}
@@ -266,7 +320,7 @@ Deploy to Vercel with one click. Ensure all environment variables are configured
 `;
 }
 
-function generateFallbackResult(
+export function generateFallbackResult(
   analysis: RepoAnalysis,
   repoName: string
 ): OpenAIAgentResult {

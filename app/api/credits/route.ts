@@ -6,11 +6,19 @@ import {
   getShipCredits,
 } from "@/lib/stripe";
 import type { PaymentStatus } from "@/types";
+import { createLogger, generateRequestId } from "@/lib/logger";
 
 export async function GET() {
+  const requestId = generateRequestId();
+  const logger = createLogger({
+    requestId,
+    route: "GET /api/credits",
+  });
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
+    logger.warn("Unauthorized credits request");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -21,6 +29,7 @@ export async function GET() {
     if (!email) {
       // Dev mode / no email — return no credits
       const status: PaymentStatus = { plan: "none", credits: 0 };
+      logger.info("Credits request without email; returning no credits");
       return Response.json(status);
     }
 
@@ -37,9 +46,15 @@ export async function GET() {
       stripeCustomerId: customerId,
     };
 
+    logger.info("Credits status resolved", {
+      plan: status.plan,
+      credits: status.credits,
+      stripeCustomerId: status.stripeCustomerId,
+    });
+
     return Response.json(status);
   } catch (error) {
-    console.error("Credits check error:", error);
+    logger.error("Credits check error", undefined, error);
     // On error, return no credits (fail closed — don't give free access)
     const status: PaymentStatus = { plan: "none", credits: 0 };
     return Response.json(status);

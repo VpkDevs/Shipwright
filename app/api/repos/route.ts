@@ -2,11 +2,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { GitHubClient } from "@/lib/github";
 import { z } from "zod";
+import { createLogger, generateRequestId } from "@/lib/logger";
 
 export async function GET() {
+  const requestId = generateRequestId();
+  const logger = createLogger({
+    requestId,
+    route: "GET /api/repos",
+  });
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user || !(session.user as { accessToken?: string }).accessToken) {
+    logger.warn("Unauthorized repos list request: missing GitHub access token");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -15,9 +23,10 @@ export async function GET() {
 
   try {
     const repos = await client.getUserRepos();
+    logger.info("Fetched user repositories", { count: repos.length });
     return Response.json(repos);
   } catch (error) {
-    console.error("Failed to fetch repos:", error);
+    logger.error("Failed to fetch repos", undefined, error);
     return Response.json(
       { error: "Failed to fetch repositories" },
       { status: 500 }
@@ -38,21 +47,30 @@ const createPRSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const logger = createLogger({
+    requestId,
+    route: "POST /api/repos",
+  });
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user || !(session.user as { accessToken?: string }).accessToken) {
+    logger.warn("Unauthorized PR creation request: missing GitHub access token");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await request.json();
-  } catch {
+  } catch (error) {
+    logger.warn("Invalid JSON body for PR creation", undefined, error);
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const parsed = createPRSchema.safeParse(body);
   if (!parsed.success) {
+    logger.warn("Invalid PR creation parameters");
     return Response.json({ error: "Invalid request parameters" }, { status: 400 });
   }
 
@@ -62,12 +80,16 @@ export async function POST(request: Request) {
 
   const branchName = `shipwright/ship-${Date.now()}`;
 
+  logger.info("Creating ship branch for PR", { owner, repo, branchName, fileCount: files.length });
+
   // Try main, then master as the base branch
   let branch = await client.createBranch(owner, repo, branchName, "main");
   if (!branch) {
+    logger.warn("Failed to create branch from main, trying master", { owner, repo, branchName });
     branch = await client.createBranch(owner, repo, branchName, "master");
   }
   if (!branch) {
+    logger.error("Failed to create branch for PR", { owner, repo, branchName });
     return Response.json(
       { error: "Could not create branch — ensure the repository has a default branch (main or master)." },
       { status: 500 }
@@ -85,6 +107,7 @@ export async function POST(request: Request) {
       `chore: add ${file.path} via Shipwright`
     );
     if (!result) {
+      logger.error("Failed to commit file to branch", { owner, repo, branchName, path: file.path });
       return Response.json(
         { error: `Failed to commit ${file.path} to branch.` },
         { status: 500 }
@@ -104,6 +127,7 @@ export async function POST(request: Request) {
 
   // Try master if main PR fails
   if (!pr) {
+    logger.warn("PR creation against main failed, trying master", { owner, repo, branchName });
     const prMaster = await client.createPullRequest(
       owner,
       repo,
@@ -113,13 +137,16 @@ export async function POST(request: Request) {
       "master"
     );
     if (!prMaster) {
+      logger.error("PR creation failed for both main and master", { owner, repo, branchName });
       return Response.json(
         { error: "Files committed but PR creation failed. Check the repository for the new branch." },
         { status: 500 }
       );
     }
+    logger.info("PR created against master", { url: prMaster.html_url, branchName });
     return Response.json({ url: prMaster.html_url, branch: branchName });
   }
 
+  logger.info("PR created against main", { url: pr.html_url, branchName });
   return Response.json({ url: pr.html_url, branch: branchName });
 }

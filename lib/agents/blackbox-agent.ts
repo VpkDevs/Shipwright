@@ -1,5 +1,6 @@
 import type { RepoAnalysis } from "@/types";
 import { GitHubClient } from "@/lib/github";
+import type { Logger } from "@/lib/logger";
 
 const BLACKBOX_API_URL = "https://api.blackbox.ai/api/chat";
 const BLACKBOX_MODEL = "blackboxai";
@@ -22,42 +23,62 @@ interface BlackboxResponse {
 
 async function callBlackbox(
   messages: BlackboxMessage[],
-  maxTokens = 1500
+  maxTokens = 1500,
+  timeoutMs = 30000
 ): Promise<string> {
   const apiKey = process.env.BLACKBOX_API_KEY;
-  if (!apiKey) throw new Error("BLACKBOX_API_KEY is not set");
-
-  const response = await fetch(BLACKBOX_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: BLACKBOX_MODEL,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.4,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Blackbox API error ${response.status}: ${text}`);
+  if (!apiKey) {
+    throw new Error("BLACKBOX_API_KEY is not set");
   }
 
-  const data = (await response.json()) as BlackboxResponse;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
-  // Handle different response formats
-  if (data.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content;
-  }
-  if (data.response) {
-    return data.response;
-  }
+  try {
+    const response = await fetch(BLACKBOX_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: BLACKBOX_MODEL,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.4,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
 
-  throw new Error("Unexpected Blackbox API response format");
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Blackbox API error ${response.status}: ${text}`);
+    }
+
+    const data = (await response.json()) as BlackboxResponse;
+
+    // Handle different response formats
+    if (data.choices?.[0]?.message?.content) {
+      return data.choices[0].message.content;
+    }
+    if (data.response) {
+      return data.response;
+    }
+
+    throw new Error("Unexpected Blackbox API response format");
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `Blackbox API request timed out after ${timeoutMs}ms`
+      );
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // ─── Main Agent ───────────────────────────────────────────────────────────────
@@ -80,32 +101,56 @@ export async function runBlackboxAgent(
   repo: string,
   analysis: RepoAnalysis,
   githubToken: string,
-  onStep?: (label: string, detail?: string) => void
+  onStep?: (label: string, detail?: string) => void,
+  logger?: Logger
 ): Promise<BlackboxAgentResult> {
   const github = new GitHubClient(githubToken);
+  const agentLogger = logger?.child({ agent: "blackbox", owner, repo });
 
   // Step 1: Gather repo context (read key files)
   onStep?.("Blackbox AI: Reading repository", "Fetching key files");
+  agentLogger?.info("Reading repository file tree", {
+    framework: analysis.framework,
+    backendType: analysis.backendType,
+  });
 
   const fileTree = await github.getFileTree(owner, repo, 1);
   const fileList = fileTree.map((f) => f.path).join("\n");
+  agentLogger?.debug("Repository file tree fetched", {
+    fileCount: fileTree.length,
+  });
 
   // Read package.json for deep analysis
-  const packageJsonContent = await github.getFileContent(owner, repo, "package.json");
+  const packageJsonContent = await github.getFileContent(
+    owner,
+    repo,
+    "package.json"
+  );
 
   // Try to read main entry point
-  const entryFiles = ["src/index.ts", "src/index.js", "index.ts", "index.js", "src/app.ts", "src/main.ts"];
+  const entryFiles = [
+    "src/index.ts",
+    "src/index.js",
+    "index.ts",
+    "index.js",
+    "src/app.ts",
+    "src/main.ts",
+  ];
   let entryContent = "";
   for (const file of entryFiles) {
     const content = await github.getFileContent(owner, repo, file);
     if (content) {
       entryContent = content.slice(0, 2000);
+      agentLogger?.debug("Detected entry file for analysis", {
+        path: file,
+      });
       break;
     }
   }
 
   // Step 2: Code analysis
   onStep?.("Blackbox AI: Analyzing code", "Deep dependency analysis");
+  agentLogger?.info("Calling Blackbox for code analysis");
 
   const analysisPrompt = `You are a senior DevOps engineer analyzing a GitHub repository for deployment readiness.
 
@@ -121,9 +166,19 @@ Risk score: ${analysis.deploymentRiskScore}/100
 File structure:
 ${fileList.slice(0, 1000)}
 
-${packageJsonContent ? `package.json:\n${packageJsonContent.slice(0, 1500)}` : ""}
+${
+  packageJsonContent
+    ? `package.json:
+${packageJsonContent.slice(0, 1500)}`
+    : ""
+}
 
-${entryContent ? `Main entry file:\n${entryContent}` : ""}
+${
+  entryContent
+    ? `Main entry file:
+${entryContent}`
+    : ""
+}
 
 Provide a JSON response with exactly this structure:
 {
@@ -137,30 +192,57 @@ Provide a JSON response with exactly this structure:
   let suggestedScripts: Record<string, string> = {};
 
   try {
-    const analysisResponse = await callBlackbox([
-      { role: "user", content: analysisPrompt },
-    ]);
+    const analysisResponse = await callBlackbox(
+      [{ role: "user", content: analysisPrompt }],
+      1500
+    );
 
     const parsed = extractJSON(analysisResponse);
     if (parsed) {
-      codeInsights = typeof parsed.codeInsights === "string" ? parsed.codeInsights : "";
-      riskAssessment = typeof parsed.riskAssessment === "string" ? parsed.riskAssessment : "";
+      codeInsights =
+        typeof parsed.codeInsights === "string"
+          ? parsed.codeInsights
+          : "";
+      riskAssessment =
+        typeof parsed.riskAssessment === "string"
+          ? parsed.riskAssessment
+          : "";
       suggestedScripts =
         parsed.suggestedScripts &&
         typeof parsed.suggestedScripts === "object" &&
         !Array.isArray(parsed.suggestedScripts)
           ? (parsed.suggestedScripts as Record<string, string>)
           : {};
+      agentLogger?.info("Blackbox analysis parsed successfully", {
+        hasSuggestedScripts: Object.keys(suggestedScripts).length > 0,
+      });
     } else {
       codeInsights = analysisResponse.slice(0, 300);
+      agentLogger?.warn(
+        "Blackbox analysis did not return valid JSON, using raw text snippet"
+      );
     }
   } catch (err) {
-    onStep?.("Blackbox AI: Analysis warning", String(err));
-    codeInsights = `${analysis.framework} project analyzed. ${analysis.missingConfigs.length > 0 ? "Some configurations are missing." : "Configuration looks good."}`;
+    const message = String(err);
+    onStep?.("Blackbox AI: Analysis warning", message);
+    agentLogger?.error(
+      "Blackbox analysis step failed, using heuristic fallback",
+      undefined,
+      err
+    );
+    codeInsights = `${analysis.framework} project analyzed. ${
+      analysis.missingConfigs.length > 0
+        ? "Some configurations are missing."
+        : "Configuration looks good."
+    }`;
   }
 
   // Step 3: Generate Vercel config
-  onStep?.("Blackbox AI: Generating Vercel config", "Creating deployment config");
+  onStep?.(
+    "Blackbox AI: Generating Vercel config",
+    "Creating deployment config"
+  );
+  agentLogger?.info("Calling Blackbox for vercel.json generation");
 
   const vercelPrompt = `Generate a production-ready vercel.json for this project:
 Framework: ${analysis.framework}
@@ -171,19 +253,31 @@ Return ONLY valid JSON for vercel.json, no explanation.`;
 
   let vercelConfig = "";
   try {
-    const vercelResponse = await callBlackbox([
-      { role: "user", content: vercelPrompt },
-    ], 500);
+    const vercelResponse = await callBlackbox(
+      [{ role: "user", content: vercelPrompt }],
+      500
+    );
 
     // Extract JSON from response
     const jsonMatch = vercelResponse.match(/\{[\s\S]*\}/);
-    vercelConfig = jsonMatch ? jsonMatch[0] : generateDefaultVercelConfig(analysis);
-  } catch {
+    vercelConfig = jsonMatch
+      ? jsonMatch[0]
+      : generateDefaultVercelConfig(analysis);
+    agentLogger?.info("Blackbox vercel.json generation completed", {
+      usedFallback: !jsonMatch,
+    });
+  } catch (err) {
+    agentLogger?.error(
+      "Blackbox vercel.json generation failed, using default template",
+      undefined,
+      err
+    );
     vercelConfig = generateDefaultVercelConfig(analysis);
   }
 
   // Step 4: Generate env template
   onStep?.("Blackbox AI: Generating env template", "Creating .env.example");
+  agentLogger?.info("Calling Blackbox for env template generation");
 
   const envPrompt = `Generate a .env.example file for a ${analysis.framework} project.
 Known env vars: ${analysis.envVarsDetected.join(", ") || "none"}
@@ -193,10 +287,19 @@ Return ONLY the .env.example content with helpful comments, no explanation.`;
 
   let envTemplate = "";
   try {
-    envTemplate = await callBlackbox([{ role: "user", content: envPrompt }], 400);
+    envTemplate = await callBlackbox(
+      [{ role: "user", content: envPrompt }],
+      400
+    );
     // Clean up any markdown code blocks
     envTemplate = envTemplate.replace(/```[a-z]*\n?/g, "").trim();
-  } catch {
+    agentLogger?.info("Blackbox env template generation completed");
+  } catch (err) {
+    agentLogger?.error(
+      "Blackbox env template generation failed, using default template",
+      undefined,
+      err
+    );
     envTemplate = generateDefaultEnvTemplate(analysis);
   }
 
@@ -211,7 +314,7 @@ Return ONLY the .env.example content with helpful comments, no explanation.`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function extractJSON(text: string): Record<string, unknown> | null {
+export function extractJSON(text: string): Record<string, unknown> | null {
   try {
     // Try direct parse first
     return JSON.parse(text) as Record<string, unknown>;

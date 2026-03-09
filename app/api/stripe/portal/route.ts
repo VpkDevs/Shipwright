@@ -1,11 +1,19 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { stripe, getOrCreateCustomer } from "@/lib/stripe";
+import { createLogger, generateRequestId } from "@/lib/logger";
 
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const logger = createLogger({
+    requestId,
+    route: "POST /api/stripe/portal",
+  });
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
+    logger.warn("Unauthorized Stripe portal request");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -28,9 +36,14 @@ export async function POST(request: Request) {
       return_url: `${origin}/repos`,
     });
 
+    logger.info("Created Stripe billing portal session", {
+      customerId,
+      email,
+    });
+
     return Response.json({ url: portalSession.url });
   } catch (error) {
-    console.error("Stripe portal error:", error);
+    logger.error("Stripe portal error", undefined, error);
     return Response.json(
       { error: "Failed to create portal session" },
       { status: 500 }

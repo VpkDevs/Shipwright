@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { stripe, STRIPE_PRICES, getOrCreateCustomer } from "@/lib/stripe";
 import { z } from "zod";
+import { createLogger, generateRequestId } from "@/lib/logger";
 
 const checkoutSchema = z.object({
   /** Accept plan type — never trust client-supplied price IDs */
@@ -10,9 +11,16 @@ const checkoutSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const logger = createLogger({
+    requestId,
+    route: "POST /api/stripe/checkout",
+  });
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
+    logger.warn("Unauthorized Stripe checkout request");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -76,12 +84,20 @@ export async function POST(request: Request) {
         : {}),
     });
 
+    logger.info("Created Stripe checkout session", {
+      plan,
+      customerId,
+      email,
+      repoFullName: repoFullName || undefined,
+      mode: isSubscription ? "subscription" : "payment",
+    });
+
     return Response.json({ url: checkoutSession.url });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return Response.json({ error: "Invalid request" }, { status: 400 });
     }
-    console.error("Stripe checkout error:", error);
+    logger.error("Stripe checkout error", undefined, error);
     return Response.json(
       { error: "Failed to create checkout session" },
       { status: 500 }

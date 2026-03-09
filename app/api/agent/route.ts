@@ -8,6 +8,7 @@ import {
 } from "@/lib/stripe";
 import { runOrchestrator } from "@/lib/agents/orchestrator";
 import { z } from "zod";
+import { createLogger, generateRequestId } from "@/lib/logger";
 
 const agentSchema = z.object({
   owner: z.string().min(1),
@@ -16,19 +17,36 @@ const agentSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const requestId = generateRequestId();
+  const baseLogger = createLogger({
+    requestId,
+    route: "POST /api/agent",
+  });
+
+  baseLogger.info("Incoming agent request");
+
   const session = await getServerSession(authOptions);
 
   if (!session?.user || !(session.user as { accessToken?: string }).accessToken) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    baseLogger.warn("Unauthorized agent request: missing GitHub access token");
+    return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
   }
 
   // ── Payment Gate ────────────────────────────────────────────────────────
   const user = session.user as { email?: string; name?: string; accessToken?: string };
   const email = user.email || "";
+  const logger = baseLogger.child({
+    email: email || undefined,
+    userName: user.name || undefined,
+  });
 
   if (!email) {
+    logger.warn("Agent request missing account email");
     return Response.json(
-      { error: "Account email required to use AI generation. Please sign in with GitHub." },
+      {
+        error: "Account email required to use AI generation. Please sign in with GitHub.",
+        requestId,
+      },
       { status: 403 }
     );
   }
@@ -44,9 +62,9 @@ export async function POST(request: Request) {
       getShipCredits(customerId),
     ]);
   } catch (err) {
-    console.error("Payment check failed:", err);
+    logger.error("Payment check failed", { email }, err);
     return Response.json(
-      { error: "Payment verification failed. Please try again." },
+      { error: "Payment verification failed. Please try again.", requestId },
       { status: 500 }
     );
   }
@@ -54,12 +72,17 @@ export async function POST(request: Request) {
   const hasAccess = isPro || credits > 0;
 
   if (!hasAccess) {
+    logger.info("Payment required for agent request", {
+      plan: "none",
+      credits,
+    });
     return Response.json(
       {
         error: "payment_required",
         message: "AI generation requires a Ship Credit ($5) or Pro subscription ($15/month).",
         plan: "none",
         credits: 0,
+        requestId,
       },
       { status: 402 }
     );
@@ -90,6 +113,7 @@ export async function POST(request: Request) {
       repo,
       githubToken,
       description,
+      logger,
       onStep: (step) => {
         // Update or add step
         const existing = steps.find((s) => s.id === step.id);
@@ -109,22 +133,35 @@ export async function POST(request: Request) {
         await consumeShipCredit(customerId);
       } catch (err) {
         // Log but don't fail — user already got their result
-        console.error("Failed to consume ship credit:", err);
+        logger.error("Failed to consume ship credit", { customerId }, err);
       }
     }
+
+    const creditsRemaining = isPro ? null : Math.max(0, credits - 1);
+
+    logger.info("Agent run completed", {
+      owner,
+      repo,
+      provider: result.provider,
+      isPro,
+      creditsBefore: credits,
+      creditsRemaining,
+    });
 
     return Response.json({
       ...result,
       steps,
-      creditsRemaining: isPro ? null : Math.max(0, credits - 1),
+      creditsRemaining,
       plan: isPro ? "pro" : "credit",
+      requestId,
     });
   } catch (error) {
-    console.error("Agent orchestrator failed:", error);
+    logger.error("Agent orchestrator failed", { owner, repo }, error);
     return Response.json(
       {
         error: "AI generation failed. Please try again.",
         steps,
+        requestId,
       },
       { status: 500 }
     );
