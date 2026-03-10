@@ -1,10 +1,19 @@
-import { RepoAnalysis } from "@/types";
+import type { RepoAnalysis } from "@/types";
 
 export function generateReadme(
   repoName: string,
   analysis: RepoAnalysis,
   description?: string
 ): string {
+  const installCmd =
+    analysis.packageManager === "npm" ? "npm install" : `${analysis.packageManager} install`;
+  const devCmd =
+    analysis.packageManager === "npm" ? "npm run dev" : `${analysis.packageManager} dev`;
+  const buildCmd =
+    analysis.packageManager === "npm" ? "npm run build" : `${analysis.packageManager} build`;
+  const startCmd =
+    analysis.packageManager === "npm" ? "npm start" : `${analysis.packageManager} start`;
+
   const sections = [
     `# ${repoName}`,
     "",
@@ -20,39 +29,39 @@ export function generateReadme(
     "",
     `- **Framework**: ${analysis.framework}`,
     `- **Package Manager**: ${analysis.packageManager}`,
-    `- **Backend**: ${analysis.backendType}`,
-    analysis.hasDocker ? "- **Container**: Docker" : "",
+    ...(analysis.backendType !== "Frontend" ? [`- **Backend**: ${analysis.backendType}`] : []),
+    ...(analysis.hasDocker ? ["- **Container**: Docker"] : []),
     "",
     "## Getting Started",
     "",
     "### Prerequisites",
     "",
-    `- Node.js 18+`,
+    "- Node.js 18+",
     `- ${analysis.packageManager}`,
-    analysis.hasDocker ? "- Docker" : "",
+    ...(analysis.hasDocker ? ["- Docker"] : []),
     "",
     "### Installation",
     "",
     "```bash",
-    `${analysis.packageManager} install`,
+    installCmd,
     "```",
     "",
     "### Development",
     "",
     "```bash",
-    `${analysis.packageManager} run dev`,
+    devCmd,
     "```",
     "",
     "### Build",
     "",
     "```bash",
-    `${analysis.packageManager} run build`,
+    buildCmd,
     "```",
     "",
     "### Production",
     "",
     "```bash",
-    `${analysis.packageManager} start`,
+    startCmd,
     "```",
     "",
     "## Environment Variables",
@@ -60,7 +69,7 @@ export function generateReadme(
     "Copy `.env.example` to `.env.local` and fill in the required values:",
     "",
     analysis.envVarsDetected.length > 0
-      ? `\`\`\`\n${analysis.envVarsDetected.map((v) => `${v}=value`).join("\n")}\n\`\`\``
+      ? `\`\`\`\n${analysis.envVarsDetected.map((v) => `${v}=`).join("\n")}\n\`\`\``
       : "```\n# Add your environment variables here\n```",
     "",
     "## Deployment",
@@ -89,5 +98,5 @@ export function generateReadme(
     "If you have any questions or issues, please open an issue on GitHub.",
   ];
 
-  return sections.filter((s) => s !== "").join("\n");
+  return sections.join("\n");
 }
