@@ -1,9 +1,12 @@
 "use client";
 
+import type { AgentStep, PaymentStatus, RepoAnalysis } from "@/types";
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
-import type { RepoAnalysis, AgentStep, PaymentStatus } from "@/types";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useTheme } from "@/lib/theme";
+import { useToast } from "@/lib/toast";
+import { formatRelative } from "@/lib/utils";
 
 interface TemplateContent {
   vercelJson: string;
@@ -31,6 +34,85 @@ interface AIContent {
 
 type GeneratedContent = TemplateContent | AIContent;
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
+function downloadTextFile(
+  fileName: string,
+  content: string,
+  mimeType = "text/plain;charset=utf-8"
+) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function getRiskMeta(score: number) {
+  if (score < 30) {
+    return {
+      label: "Low risk",
+      summary: "This repo looks close to deployable.",
+      barClass: "bg-green-500",
+      badgeClass: "border border-green-500/30 bg-green-500/10 text-green-300",
+    };
+  }
+
+  if (score < 60) {
+    return {
+      label: "Medium risk",
+      summary: "A few deployment gaps should be fixed before shipping.",
+      barClass: "bg-yellow-500",
+      badgeClass: "border border-yellow-500/30 bg-yellow-500/10 text-yellow-200",
+    };
+  }
+
+  return {
+    label: "High risk",
+    summary: "Shipwright found several issues worth resolving first.",
+    barClass: "bg-red-500",
+    badgeClass: "border border-red-500/30 bg-red-500/10 text-red-200",
+  };
+}
+
+function getRecommendedNextSteps(analysis: RepoAnalysis): string[] {
+  const steps: string[] = [];
+
+  if (analysis.missingConfigs.includes("build script")) {
+    steps.push("Add a reliable build script so deployments can produce a production bundle.");
+  }
+
+  if (analysis.missingConfigs.includes("start script")) {
+    steps.push("Add a start script so the deployed service has a clear runtime entrypoint.");
+  }
+
+  if (analysis.missingConfigs.includes("deployment config")) {
+    steps.push("Add deployment config or Docker so the runtime, build, and output are explicit.");
+  }
+
+  if (analysis.missingConfigs.includes(".env.example")) {
+    steps.push("Create an .env.example file so teammates and deployments know which secrets are required.");
+  }
+
+  if (analysis.envVarsDetected.length > 0) {
+    steps.push(`Review ${analysis.envVarsDetected.length} detected environment variable${analysis.envVarsDetected.length === 1 ? "" : "s"} before shipping.`);
+  }
+
+  if (steps.length === 0) {
+    steps.push("Generate a preview to inspect the suggested README, env template, and deployment config.");
+    steps.push("If the output looks good, use AI Ship to generate repo-aware content and create a PR.");
+  }
+
+  return steps.slice(0, 3);
+}
+
 export default function RepoPage() {
   const router = useRouter();
   const params = useParams();
@@ -40,23 +122,62 @@ export default function RepoPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "readme" | "landing" | "config">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "readme" | "landing" | "config">(
+    "overview"
+  );
+  const { toggle } = useTheme();
+  const [showLandingPreview, setShowLandingPreview] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const toast = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
+  const [showAllMissingConfigs, setShowAllMissingConfigs] = useState(false);
+  const [showAllEnvVars, setShowAllEnvVars] = useState(false);
 
   const slug = params?.slug;
   const owner = Array.isArray(slug) ? slug[0] : slug;
   const repo = Array.isArray(slug) ? slug[1] : undefined;
+
+  const copyText = useCallback(async (value: string, section: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedSection(section);
+      toast("Copied to clipboard", "success");
+      window.setTimeout(
+        () => setCopiedSection((current) => (current === section ? null : current)),
+        2000
+      );
+    } catch (error) {
+      const msg = getErrorMessage(error, "Failed to copy to clipboard");
+      setError(msg);
+      toast(msg, "error");
+    }
+  }, [toast]);
+
+  const downloadLandingPage = useCallback(() => {
+    if (!generated) return;
+    const html = generated.isAI ? generated.aiLandingPage : generated.landingPage;
+    downloadTextFile(`${repo || "shipwright"}-landing-page.html`, html, "text/html;charset=utf-8");
+  }, [generated, repo]);
+
+  const downloadReadme = useCallback(() => {
+    if (!generated) return;
+    downloadTextFile(
+      "README.md",
+      generated.isAI ? generated.aiReadme : generated.readme,
+      "text/markdown;charset=utf-8"
+    );
+  }, [generated]);
 
   // Check payment status
   const fetchPaymentStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/credits");
       if (res.ok) {
-        const data = await res.json() as PaymentStatus;
+        const data = (await res.json()) as PaymentStatus;
         setPaymentStatus(data);
       }
     } catch {
@@ -86,7 +207,7 @@ export default function RepoPage() {
           throw new Error("Failed to analyze");
         }
 
-        const data = await analyzeRes.json() as RepoAnalysis;
+        const data = (await analyzeRes.json()) as RepoAnalysis;
         setAnalysis(data);
       } catch (err) {
         setError("Failed to analyze repository");
@@ -115,18 +236,24 @@ export default function RepoPage() {
     if (!owner || !repo || isGenerating) return;
     setIsGenerating(true);
     setError("");
+    setPrUrl(null);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owner, repo }),
       });
-      if (!res.ok) throw new Error("Failed to generate");
-      const data = await res.json() as TemplateContent;
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errData?.error || "Failed to generate");
+      }
+      const data = (await res.json()) as TemplateContent;
       setGenerated({ ...data, isAI: false });
+      setShowLandingPreview(false);
       setActiveTab("readme");
+      toast("Template generated", "success");
     } catch (err) {
-      setError("Failed to generate template content");
+      setError(getErrorMessage(err, "Failed to generate template content"));
       console.error(err);
     } finally {
       setIsGenerating(false);
@@ -139,6 +266,7 @@ export default function RepoPage() {
     setIsShipping(true);
     setError("");
     setAgentSteps([]);
+    setPrUrl(null);
 
     try {
       const res = await fetch("/api/agent", {
@@ -149,24 +277,26 @@ export default function RepoPage() {
 
       if (res.status === 402) {
         // Payment required — redirect to pricing
-        router.push(`/pricing`);
+        router.push("/pricing");
         return;
       }
 
       if (!res.ok) {
-        const errData = await res.json() as { error?: string };
+        const errData = (await res.json()) as { error?: string };
         throw new Error(errData.error || "AI generation failed");
       }
 
-      const data = await res.json() as Omit<AIContent, "isAI">;
+      const data = (await res.json()) as Omit<AIContent, "isAI">;
       setGenerated({ ...data, isAI: true });
       setAgentSteps(data.steps || []);
+      setShowLandingPreview(true);
       setActiveTab("readme");
+      toast("AI generation complete", "success");
 
       // Refresh payment status
       await fetchPaymentStatus();
     } catch (err) {
-      setError(String(err));
+      setError(getErrorMessage(err, "AI generation failed"));
       console.error(err);
     } finally {
       setIsShipping(false);
@@ -181,8 +311,14 @@ export default function RepoPage() {
 
     const aiContent = generated.isAI ? generated : null;
     const readme = aiContent ? aiContent.aiReadme : (generated as TemplateContent).readme;
+    const landingPage = generated.isAI
+      ? generated.aiLandingPage
+      : (generated as TemplateContent).landingPage;
     const vercelJson = generated.vercelJson;
     const envTemplate = generated.envTemplate;
+    const recommendations = generated.isAI
+      ? generated.deploymentRecommendations.map((item, index) => `${index + 1}. ${item}`).join("\n")
+      : "";
 
     try {
       const res = await fetch("/api/repos", {
@@ -196,20 +332,32 @@ export default function RepoPage() {
             { path: "README.md", content: readme },
             ...(vercelJson ? [{ path: "vercel.json", content: vercelJson }] : []),
             { path: ".env.example", content: envTemplate },
+            { path: "shipwright/landing-page.html", content: landingPage },
+            ...(recommendations
+              ? [
+                  {
+                    path: "shipwright/deployment-recommendations.md",
+                    content: `# Deployment Recommendations\n\n${recommendations}\n`,
+                  },
+                ]
+              : []),
           ],
         }),
       });
 
       if (res.ok) {
-        const data = await res.json() as { url?: string };
+        const data = (await res.json()) as { url?: string };
         if (data.url) {
           setPrUrl(data.url);
+          toast("Pull request created", "success");
         }
       } else {
         throw new Error("Failed to create PR");
       }
     } catch (err) {
-      setError("PR creation failed — you can manually copy the files above.");
+      const msg = getErrorMessage(err, "PR creation failed — you can manually copy the files above.");
+      setError(msg);
+      toast(msg, "error");
       console.error(err);
     } finally {
       setIsCreatingPR(false);
@@ -217,17 +365,31 @@ export default function RepoPage() {
   };
 
   const hasPayment = paymentStatus && (paymentStatus.plan === "pro" || paymentStatus.credits > 0);
+  const riskMeta = analysis ? getRiskMeta(analysis.deploymentRiskScore) : null;
+  const recommendedNextSteps = analysis ? getRecommendedNextSteps(analysis) : [];
+  const visibleMissingConfigs = analysis
+    ? showAllMissingConfigs
+      ? analysis.missingConfigs
+      : analysis.missingConfigs.slice(0, 4)
+    : [];
+  const visibleEnvVars = analysis
+    ? showAllEnvVars
+      ? analysis.envVarsDetected
+      : analysis.envVarsDetected.slice(0, 4)
+    : [];
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
         <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-4">
-            <Link href="/repos" className="text-2xl font-bold text-blue-400">← Back</Link>
+            <Link href="/repos" className="text-2xl font-bold text-blue-400">
+              ← Back
+            </Link>
           </div>
         </nav>
         <div className="max-w-6xl mx-auto px-6 py-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
           <p className="text-slate-400">Analyzing repository...</p>
         </div>
       </div>
@@ -239,13 +401,17 @@ export default function RepoPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
         <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
           <div className="max-w-6xl mx-auto px-6 py-4">
-            <Link href="/repos" className="text-2xl font-bold text-blue-400">← Back</Link>
+            <Link href="/repos" className="text-2xl font-bold text-blue-400">
+              ← Back
+            </Link>
           </div>
         </nav>
         <div className="max-w-6xl mx-auto px-6 py-12">
           <div className="card text-center py-12">
             <p className="text-red-400 mb-4">{error || "Repository not found"}</p>
-            <Link href="/repos" className="btn-secondary">Back to Repos</Link>
+            <Link href="/repos" className="btn-secondary">
+              Back to Repos
+            </Link>
           </div>
         </div>
       </div>
@@ -256,17 +422,39 @@ export default function RepoPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
       <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <Link href="/repos" className="text-xl font-bold text-blue-400">← {repo}</Link>
+          <div className="flex items-center gap-4">
+            <Link href="/repos" className="text-xl font-bold text-blue-400">
+              ← {repo}
+            </Link>
+            {analysis.updatedAt && (
+              <span className="hidden text-xs text-slate-400 sm:inline">
+                Updated {formatRelative(analysis.updatedAt)}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3">
+            <a
+              href={analysis.htmlUrl || `https://github.com/${owner}/${repo}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm"
+            >
+              GitHub
+            </a>
             {paymentStatus?.plan === "pro" && (
-              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">PRO</span>
+              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">
+                PRO
+              </span>
             )}
             {paymentStatus?.plan === "credit" && (
               <span className="text-xs bg-green-700 text-white px-2 py-1 rounded-full font-semibold">
                 {paymentStatus.credits} credit{paymentStatus.credits !== 1 ? "s" : ""}
               </span>
             )}
-            <a href="/api/auth/signout" className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm">
+            <a
+              href="/api/auth/signout"
+              className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm"
+            >
               Sign Out
             </a>
           </div>
@@ -275,84 +463,182 @@ export default function RepoPage() {
 
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="grid md:grid-cols-3 gap-8">
-
           {/* ── Left: Analysis + Actions ── */}
           <div>
             <div className="card sticky top-24 space-y-4">
-              <h2 className="text-lg font-semibold">Analysis</h2>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Analysis</h2>
+                  <p className="text-xs text-slate-400 mt-1">Stack, blockers, and suggested next steps.</p>
+                </div>
+                {riskMeta && (
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${riskMeta.badgeClass}`}>
+                    {riskMeta.label}
+                  </span>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4 space-y-3">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Deployment readiness</p>
+                    <p className="text-2xl font-semibold text-white">{100 - analysis.deploymentRiskScore}%</p>
+                  </div>
+                  <p className="text-right text-xs text-slate-400 max-w-[13rem]">{riskMeta?.summary}</p>
+                </div>
+                <div className="w-full rounded-full bg-slate-700 h-2.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${riskMeta?.barClass ?? "bg-blue-500"}`}
+                    style={{ width: `${100 - analysis.deploymentRiskScore}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="text-slate-500">Config blockers</p>
+                    <p className="mt-1 text-lg font-semibold text-white">
+                      {analysis.missingConfigs.length}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                    <p className="text-slate-500">Env vars found</p>
+                    <p className="mt-1 text-lg font-semibold text-white">
+                      {analysis.envVarsDetected.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3">
+                  <p className="text-slate-500 text-xs">Framework</p>
+                  <p className="mt-1 font-semibold text-blue-400">{analysis.framework}</p>
+                </div>
+                <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3">
+                  <p className="text-slate-500 text-xs">Package Manager</p>
+                  <p className="mt-1 font-semibold">{analysis.packageManager}</p>
+                </div>
+                <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 p-3 col-span-2">
+                  <p className="text-slate-500 text-xs">Backend</p>
+                  <p className="mt-1 font-semibold">{analysis.backendType}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
+                  {analysis.usesTypeScript ? "TypeScript detected" : "No TypeScript config detected"}
+                </span>
+                <span
+                  className={`rounded-full border px-2.5 py-1 ${
+                    analysis.hasDocker
+                      ? "border-green-500/30 bg-green-500/10 text-green-300"
+                      : "border-slate-700 text-slate-400"
+                  }`}
+                >
+                  {analysis.hasDocker ? "Docker present" : "No Dockerfile detected"}
+                </span>
+              </div>
 
               <div className="space-y-3 text-sm">
                 <div>
-                  <p className="text-slate-500 text-xs">Framework</p>
-                  <p className="font-semibold text-blue-400">{analysis.framework}</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-slate-500 text-xs uppercase tracking-wide">Ship blockers</p>
+                    <span className="text-xs text-slate-400">
+                      {analysis.missingConfigs.length === 0 ? "None" : `${analysis.missingConfigs.length} found`}
+                    </span>
+                  </div>
+                  {analysis.missingConfigs.length > 0 ? (
+                    <>
+                      <ul className="space-y-1.5 text-xs text-slate-300">
+                        {visibleMissingConfigs.map((c) => (
+                          <li key={c} className="flex items-start gap-2">
+                            <span className="mt-0.5 text-amber-300">•</span>
+                            <span>{c}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {analysis.missingConfigs.length > visibleMissingConfigs.length && (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs text-blue-400 hover:underline"
+                          onClick={() => setShowAllMissingConfigs(true)}
+                        >
+                          Show all blockers
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-green-300">No obvious config blockers detected.</p>
+                  )}
                 </div>
+
                 <div>
-                  <p className="text-slate-500 text-xs">Package Manager</p>
-                  <p className="font-semibold">{analysis.packageManager}</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-slate-500 text-xs uppercase tracking-wide">Environment variables</p>
+                    <span className="text-xs text-slate-400">{analysis.envVarsDetected.length}</span>
+                  </div>
+                  {analysis.envVarsDetected.length > 0 ? (
+                    <>
+                      <ul className="space-y-1.5 text-xs text-slate-300">
+                        {visibleEnvVars.map((envVar) => (
+                          <li key={envVar} className="font-mono text-[11px] break-all">
+                            {envVar}
+                          </li>
+                        ))}
+                      </ul>
+                      {analysis.envVarsDetected.length > visibleEnvVars.length && (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs text-blue-400 hover:underline"
+                          onClick={() => setShowAllEnvVars(true)}
+                        >
+                          Show all environment variables
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-400">No environment variables were detected from the sampled repo files.</p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-slate-500 text-xs">Backend</p>
-                  <p className="font-semibold">{analysis.backendType}</p>
+
+                <div className="rounded-lg border border-slate-700/80 bg-slate-900/40 p-3">
+                  <p className="text-slate-500 text-xs uppercase tracking-wide mb-2">Recommended next steps</p>
+                  <ul className="space-y-2 text-xs text-slate-300">
+                    {recommendedNextSteps.map((step) => (
+                      <li key={step} className="flex items-start gap-2">
+                        <span className="mt-0.5 text-blue-400">→</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                {analysis.hasDocker && (
-                  <div className="flex items-center gap-2 text-green-400 text-xs">
-                    <span>✓</span> Docker present
-                  </div>
-                )}
-                <div>
-                  <p className="text-slate-500 text-xs mb-1">Risk Score</p>
-                  <div className="w-full bg-slate-700 rounded h-2">
-                    <div
-                      className={`h-2 rounded ${
-                        analysis.deploymentRiskScore < 30
-                          ? "bg-green-500"
-                          : analysis.deploymentRiskScore < 60
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                      }`}
-                      style={{ width: `${analysis.deploymentRiskScore}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">{analysis.deploymentRiskScore}% risk</p>
-                </div>
-                {analysis.missingConfigs.length > 0 && (
-                  <div>
-                    <p className="text-slate-500 text-xs mb-1">Missing Configs</p>
-                    <ul className="text-xs text-slate-400 space-y-1">
-                      {analysis.missingConfigs.map((c) => <li key={c}>• {c}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {analysis.envVarsDetected.length > 0 && (
-                  <div>
-                    <p className="text-slate-500 text-xs mb-1">Env Variables</p>
-                    <ul className="text-xs text-slate-400 space-y-1">
-                      {analysis.envVarsDetected.map((e) => <li key={e}>• {e}</li>)}
-                    </ul>
-                  </div>
-                )}
               </div>
 
               <div className="border-t border-slate-700 pt-4 space-y-3">
                 {/* Free template preview */}
                 <button
+                  type="button"
                   onClick={handleTemplateGenerate}
-                  disabled={isGenerating || isShipping || !!generated}
+                  disabled={isGenerating || isShipping}
                   className="btn-secondary w-full text-sm disabled:opacity-40"
                 >
-                  {isGenerating ? "Generating..." : "Preview (Free Template)"}
+                  {isGenerating
+                    ? "Generating..."
+                    : generated
+                      ? "Regenerate Template"
+                      : "Preview (Free Template)"}
                 </button>
 
                 {/* AI Ship button */}
                 {hasPayment ? (
                   <button
+                    type="button"
                     onClick={handleAIShip}
                     disabled={isShipping || isGenerating}
                     className="btn-primary w-full disabled:opacity-50 relative"
                   >
                     {isShipping ? (
                       <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                         AI Shipping...
                       </span>
                     ) : (
@@ -360,10 +646,7 @@ export default function RepoPage() {
                     )}
                   </button>
                 ) : (
-                  <Link
-                    href="/pricing"
-                    className="btn-primary w-full text-center block"
-                  >
+                  <Link href="/pricing" className="btn-primary w-full text-center block">
                     🚀 Ship with AI — $5
                   </Link>
                 )}
@@ -396,12 +679,12 @@ export default function RepoPage() {
                           {step.status === "pending" && <span className="text-slate-500">○</span>}
                         </span>
                         <div>
-                          <p className={`${step.status === "done" ? "text-slate-300" : step.status === "error" ? "text-red-400" : "text-slate-400"}`}>
+                          <p
+                            className={`${step.status === "done" ? "text-slate-300" : step.status === "error" ? "text-red-400" : "text-slate-400"}`}
+                          >
                             {step.label}
                           </p>
-                          {step.detail && (
-                            <p className="text-slate-500 text-xs">{step.detail}</p>
-                          )}
+                          {step.detail && <p className="text-slate-500 text-xs">{step.detail}</p>}
                         </div>
                       </li>
                     ))}
@@ -425,15 +708,49 @@ export default function RepoPage() {
             )}
 
             {!generated ? (
-              <div className="card text-center py-16">
+              <div className="card py-10">
                 <div className="text-5xl mb-4">🚀</div>
-                <h3 className="text-xl font-semibold mb-2">Ready to ship {repo}?</h3>
-                <p className="text-slate-400 mb-6 max-w-sm mx-auto text-sm">
-                  Get a free template preview, or use AI to generate production-quality
-                  configs, README, and landing page from your actual code.
+                <h3 className="text-xl font-semibold mb-2 text-center">Ready to ship {repo}?</h3>
+                <p className="text-slate-400 mb-6 max-w-2xl mx-auto text-sm text-center">
+                  Start with a template preview, or use AI to generate production-quality configs,
+                  README, and landing page based on your repo structure.
                 </p>
+
+                <div className="grid gap-3 sm:grid-cols-3 mb-6">
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 text-left">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">Detected stack</p>
+                    <p className="mt-2 font-semibold text-blue-400">{analysis.framework}</p>
+                    <p className="text-xs text-slate-400 mt-1">{analysis.backendType}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 text-left">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">Readiness</p>
+                    <p className="mt-2 font-semibold text-white">{riskMeta?.label}</p>
+                    <p className="text-xs text-slate-400 mt-1">{riskMeta?.summary}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4 text-left">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">Top blockers</p>
+                    <p className="mt-2 font-semibold text-white">{analysis.missingConfigs.length}</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {analysis.missingConfigs[0] ?? "No blockers detected"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 mb-6 text-left">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-3">What to do next</p>
+                  <ul className="space-y-2 text-sm text-slate-300">
+                    {recommendedNextSteps.map((step) => (
+                      <li key={step} className="flex items-start gap-2">
+                        <span className="mt-0.5 text-blue-400">→</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
                 <div className="flex gap-3 justify-center flex-wrap">
                   <button
+                    type="button"
                     onClick={handleTemplateGenerate}
                     disabled={isGenerating}
                     className="btn-secondary text-sm"
@@ -452,6 +769,7 @@ export default function RepoPage() {
                   <div className="flex gap-2">
                     {(["overview", "readme", "landing", "config"] as const).map((tab) => (
                       <button
+                        type="button"
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-4 py-2 font-medium text-sm transition-colors ${
@@ -464,15 +782,22 @@ export default function RepoPage() {
                       </button>
                     ))}
                   </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                      generated.isAI
-                        ? "bg-blue-900 text-blue-300"
-                        : "bg-slate-700 text-slate-400"
-                    }`}
-                  >
-                    {generated.isAI ? "✨ AI Generated" : "📋 Template"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-500 hidden sm:inline">
+                      {generated.isAI
+                        ? prUrl
+                          ? "Ready to open your PR"
+                          : "Review the output, then create a PR"
+                        : "Template preview ready"}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                        generated.isAI ? "bg-blue-900 text-blue-300" : "bg-slate-700 text-slate-400"
+                      }`}
+                    >
+                      {generated.isAI ? "✨ AI Generated" : "📋 Template"}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="card">
@@ -484,9 +809,25 @@ export default function RepoPage() {
                           <h3 className="text-sm text-slate-400 mb-2 font-semibold">
                             🤖 AI Deployment Recommendations
                           </h3>
+                          <div className="mb-2 flex justify-end">
+                            <button
+                              type="button"
+                              className="text-xs text-blue-400 hover:underline"
+                              onClick={() =>
+                                copyText(
+                                  generated.deploymentRecommendations.join("\n"),
+                                  "recommendations"
+                                )
+                              }
+                            >
+                              {copiedSection === "recommendations"
+                                ? "Copied"
+                                : "Copy recommendations"}
+                            </button>
+                          </div>
                           <ul className="space-y-2">
-                            {generated.deploymentRecommendations.map((rec, i) => (
-                              <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                            {generated.deploymentRecommendations.map((rec) => (
+                              <li key={rec} className="flex items-start gap-2 text-sm text-slate-300">
                                 <span className="text-blue-400 mt-0.5">→</span>
                                 {rec}
                               </li>
@@ -495,13 +836,31 @@ export default function RepoPage() {
                         </div>
                       )}
                       <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Vercel Config</h3>
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-sm text-slate-500">Vercel Config</h3>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-400 hover:underline"
+                            onClick={() => copyText(generated.vercelJson || "{}", "vercel")}
+                          >
+                            {copiedSection === "vercel" ? "Copied" : "Copy config"}
+                          </button>
+                        </div>
                         <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-green-400 max-h-48">
                           {generated.vercelJson || "{}"}
                         </pre>
                       </div>
                       <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Environment Template</h3>
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-sm text-slate-500">Environment Template</h3>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-400 hover:underline"
+                            onClick={() => copyText(generated.envTemplate, "env")}
+                          >
+                            {copiedSection === "env" ? "Copied" : "Copy env"}
+                          </button>
+                        </div>
                         <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-48">
                           {generated.envTemplate}
                         </pre>
@@ -514,15 +873,44 @@ export default function RepoPage() {
                       {!generated.isAI && (
                         <div className="mb-4 p-3 bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-between">
                           <p className="text-xs text-slate-400">
-                            This is a generic template. AI generation creates a README from your actual code.
+                            This is a generic template. AI generation creates a README from your
+                            actual code.
                           </p>
-                          <Link href="/pricing" className="text-xs text-blue-400 hover:underline ml-4 whitespace-nowrap">
+                          <Link
+                            href="/pricing"
+                            className="text-xs text-blue-400 hover:underline ml-4 whitespace-nowrap"
+                          >
                             Upgrade →
                           </Link>
                         </div>
                       )}
+                      <div className="mb-3 flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          className="text-xs text-blue-400 hover:underline"
+                          onClick={downloadReadme}
+                        >
+                          Download README
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-400 hover:underline"
+                          onClick={() =>
+                            copyText(
+                              generated.isAI
+                                ? generated.aiReadme
+                                : (generated as TemplateContent).readme,
+                              "readme"
+                            )
+                          }
+                        >
+                          {copiedSection === "readme" ? "Copied" : "Copy README"}
+                        </button>
+                      </div>
                       <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96">
-                        {generated.isAI ? generated.aiReadme : (generated as TemplateContent).readme}
+                        {generated.isAI
+                          ? generated.aiReadme
+                          : (generated as TemplateContent).readme}
                       </pre>
                     </div>
                   )}
@@ -534,22 +922,86 @@ export default function RepoPage() {
                           <p className="text-xs text-slate-400">
                             AI generates landing page copy from your actual codebase.
                           </p>
-                          <Link href="/pricing" className="text-xs text-blue-400 hover:underline ml-4 whitespace-nowrap">
+                          <Link
+                            href="/pricing"
+                            className="text-xs text-blue-400 hover:underline ml-4 whitespace-nowrap"
+                          >
                             Upgrade →
                           </Link>
                         </div>
                       )}
-                      <p className="text-slate-400 text-sm mb-3">Landing page HTML preview:</p>
-                      <pre className="text-xs overflow-x-auto text-slate-300 max-h-96">
-                        {(generated.isAI ? generated.aiLandingPage : (generated as TemplateContent).landingPage).substring(0, 800)}...
-                      </pre>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-slate-400 text-sm">Landing page HTML:</p>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-400 hover:underline"
+                          onClick={() => setShowLandingPreview((f) => !f)}
+                        >
+                          {showLandingPreview ? "Show code" : "Show preview"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-400 hover:underline"
+                          onClick={() =>
+                            copyText(
+                              generated.isAI
+                                ? generated.aiLandingPage
+                                : (generated as TemplateContent).landingPage,
+                              "landing"
+                            )
+                          }
+                        >
+                          {copiedSection === "landing" ? "Copied" : "Copy HTML"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs text-blue-400 hover:underline"
+                          onClick={downloadLandingPage}
+                        >
+                          Download HTML
+                        </button>
+                      </div>
+                      {showLandingPreview ? (
+                        <iframe
+                          title="Landing page preview"
+                          className="w-full h-64 border"
+                          srcDoc={
+                            generated.isAI
+                              ? generated.aiLandingPage
+                              : (generated as TemplateContent).landingPage
+                          }
+                          sandbox="allow-scripts allow-same-origin"
+                        />
+                      ) : (
+                        <pre className="text-xs overflow-x-auto text-slate-300 max-h-96">
+                          {(generated.isAI
+                            ? generated.aiLandingPage
+                            : (generated as TemplateContent).landingPage
+                          ).substring(0, 800)}
+                          ...
+                        </pre>
+                      )}
                     </div>
                   )}
 
                   {activeTab === "config" && (
                     <div className="space-y-4">
                       <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Package.json Scripts</h3>
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-sm text-slate-500">Package.json Scripts</h3>
+                          <button
+                            type="button"
+                            className="text-xs text-blue-400 hover:underline"
+                            onClick={() =>
+                              copyText(
+                                JSON.stringify(generated.packageJsonScripts, null, 2),
+                                "scripts"
+                              )
+                            }
+                          >
+                            {copiedSection === "scripts" ? "Copied" : "Copy scripts"}
+                          </button>
+                        </div>
                         <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-blue-400">
                           {JSON.stringify(generated.packageJsonScripts, null, 2)}
                         </pre>
@@ -560,7 +1012,10 @@ export default function RepoPage() {
                           <p className="text-xs text-slate-400">
                             Provider: <span className="text-blue-400">{generated.provider}</span>
                             {generated.creditsRemaining !== null && (
-                              <span className="ml-4">Credits remaining: <span className="text-green-400">{generated.creditsRemaining}</span></span>
+                              <span className="ml-4">
+                                Credits remaining:{" "}
+                                <span className="text-green-400">{generated.creditsRemaining}</span>
+                              </span>
                             )}
                           </p>
                         </div>
@@ -581,6 +1036,7 @@ export default function RepoPage() {
                   </a>
                 ) : (
                   <button
+                    type="button"
                     onClick={handleCreatePR}
                     disabled={isCreatingPR || !generated.isAI}
                     className="btn-primary w-full mt-6 disabled:opacity-40"

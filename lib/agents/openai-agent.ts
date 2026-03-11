@@ -1,11 +1,26 @@
-import OpenAI from "openai";
-import type { RepoAnalysis } from "@/types";
 import { GitHubClient } from "@/lib/github";
 import type { Logger } from "@/lib/logger";
+import { getInstallCommand, getRunScriptCommand } from "@/lib/package-manager";
+import type { RepoAnalysis } from "@/types";
+import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (openaiClient) {
+    return openaiClient;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not set");
+  }
+
+  openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  return openaiClient;
+}
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
@@ -69,9 +84,7 @@ async function executeTool(
         return `File not found: ${path}`;
       }
       const truncated =
-        content.length > 3000
-          ? content.slice(0, 3000) + "\n...[truncated]"
-          : content;
+        content.length > 3000 ? `${content.slice(0, 3000)}\n...[truncated]` : content;
       return truncated;
     }
 
@@ -84,9 +97,7 @@ async function executeTool(
         return "Directory not found or empty";
       }
       return contents
-        .map((f: { type: string; path: string }) =>
-          `${f.type === "dir" ? "📁" : "📄"} ${f.path}`
-        )
+        .map((f: { type: string; path: string }) => `${f.type === "dir" ? "📁" : "📄"} ${f.path}`)
         .join("\n");
     }
 
@@ -167,7 +178,7 @@ Start by exploring the repo structure, then read 1-2 key files.`,
 
     let response: OpenAI.Chat.ChatCompletion;
     try {
-      response = await openai.chat.completions.create({
+      response = await getOpenAIClient().chat.completions.create({
         model: "gpt-4o-mini",
         messages,
         tools,
@@ -177,10 +188,7 @@ Start by exploring the repo structure, then read 1-2 key files.`,
       });
     } catch (err) {
       agentLogger?.error("OpenAI chat completion failed", undefined, err);
-      onStep?.(
-        "OpenAI error",
-        "Falling back to template-based README and copy"
-      );
+      onStep?.("OpenAI error", "Falling back to template-based README and copy");
       return generateFallbackResult(analysis, repo);
     }
 
@@ -202,13 +210,8 @@ Start by exploring the repo structure, then read 1-2 key files.`,
         function: { name: string; arguments: string };
       };
 
-      const args = JSON.parse(
-        fnCall.function.arguments
-      ) as Record<string, string>;
-      onStep?.(
-        `Reading ${args.path || "repo files"}`,
-        `Tool: ${fnCall.function.name}`
-      );
+      const args = JSON.parse(fnCall.function.arguments) as Record<string, string>;
+      onStep?.(`Reading ${args.path || "repo files"}`, `Tool: ${fnCall.function.name}`);
       agentLogger?.debug("Executing OpenAI tool call", {
         tool: fnCall.function.name,
         path: args.path,
@@ -231,9 +234,7 @@ Start by exploring the repo structure, then read 1-2 key files.`,
     }
   }
 
-  agentLogger?.warn(
-    "OpenAI agent reached max iterations, using fallback result"
-  );
+  agentLogger?.warn("OpenAI agent reached max iterations, using fallback result");
   // Fallback if max iterations reached
   return generateFallbackResult(analysis, repo);
 }
@@ -246,31 +247,58 @@ export function parseAgentResponse(
   repoName: string
 ): OpenAIAgentResult {
   // Extract README section
-  const readmeMatch =
-    content.match(/```markdown\n([\s\S]*?)```/i) ||
-    content.match(/# .+[\s\S]*/);
+  const readmeMatch = content.match(/```markdown\n([\s\S]*?)```/i) || content.match(/# .+[\s\S]*/);
   const readme = readmeMatch
     ? readmeMatch[1] || readmeMatch[0]
     : generateFallbackReadme(analysis, repoName);
 
-  // Extract landing page copy
-  const headlineMatch = content.match(/headline[:\s"]+([^\n"]+)/i);
-  const subheadlineMatch = content.match(/subheadline[:\s"]+([^\n"]+)/i);
-  const featuresMatch = content.match(/features?[:\s\[]+([^\]]+)/i);
+  // Extract landing page copy. Models may embed a JSON blob; prefer that when
+  // available, otherwise fall back to regex-based parsing of individual fields.
+  let landingPageCopyObj: {
+    headline?: string;
+    subheadline?: string;
+    features?: string[];
+  } = {};
+
+  // attempt to parse any JSON object in the response
+  const jsonMatch = content.match(/(\{[\s\S]*?\})/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (parsed && typeof parsed === "object") {
+        landingPageCopyObj = parsed;
+      }
+    } catch {
+      // malformed JSON is ignored, we'll fall back to regex
+    }
+  }
+
+  if (!landingPageCopyObj.headline) {
+    const headlineMatch = content.match(/headline[:\s"]+([^\n"]+)/i);
+    if (headlineMatch) landingPageCopyObj.headline = headlineMatch[1].trim();
+  }
+  if (!landingPageCopyObj.subheadline) {
+    const subheadlineMatch = content.match(/subheadline[:\s"]+([^\n"]+)/i);
+    if (subheadlineMatch) landingPageCopyObj.subheadline = subheadlineMatch[1].trim();
+  }
+  if (!landingPageCopyObj.features) {
+    const featuresMatch = content.match(/features?[:\s\[]+([^\]]+)/i);
+    if (featuresMatch) {
+      landingPageCopyObj.features = featuresMatch[1]
+        .split(/[\,\n]/)
+        .slice(0, 3)
+        .map((f) => f.trim().replace(/^['\"]|['\"]$/g, ""));
+    }
+  }
 
   const landingPageCopy = JSON.stringify({
-    headline:
-      headlineMatch?.[1]?.trim() ||
-      `Ship ${repoName} to production`,
-    subheadline:
-      subheadlineMatch?.[1]?.trim() ||
-      `${analysis.framework} app ready for deployment`,
-    features: featuresMatch
-      ? featuresMatch[1]
-          .split(/[,\n]/)
-          .slice(0, 3)
-          .map((f) => f.trim())
-      : ["Fast deployment", "Production ready", "Easy configuration"],
+    headline: landingPageCopyObj.headline || `Ship ${repoName} to production`,
+    subheadline: landingPageCopyObj.subheadline || `${analysis.framework} app ready for deployment`,
+    features: landingPageCopyObj.features || [
+      "Fast deployment",
+      "Production ready",
+      "Easy configuration",
+    ],
   });
 
   // Extract recommendations
@@ -286,18 +314,18 @@ export function parseAgentResponse(
       deploymentRecommendations.length > 0
         ? deploymentRecommendations
         : [
-            `Ensure all environment variables are set in your deployment platform`,
-            `Run \`${analysis.packageManager} run build\` before deploying`,
-            `Set NODE_ENV=production in your deployment environment`,
+            "Ensure all environment variables are set in your deployment platform",
+            `Run \`${getRunScriptCommand(analysis.packageManager, "build")}\` before deploying`,
+            "Set NODE_ENV=production in your deployment environment",
           ],
     enhancedDescription: `${analysis.framework} application — ${analysis.description}`,
   };
 }
 
-function generateFallbackReadme(
-  analysis: RepoAnalysis,
-  repoName: string
-): string {
+function generateFallbackReadme(analysis: RepoAnalysis, repoName: string): string {
+  const installCommand = getInstallCommand(analysis.packageManager);
+  const devCommand = getRunScriptCommand(analysis.packageManager, "dev");
+
   return `# ${repoName}
 
 ${analysis.description}
@@ -310,8 +338,8 @@ ${analysis.description}
 ## Getting Started
 
 \`\`\`bash
-${analysis.packageManager} install
-${analysis.packageManager} run dev
+${installCommand}
+${devCommand}
 \`\`\`
 
 ## Deployment
@@ -332,9 +360,9 @@ export function generateFallbackResult(
       features: ["Fast deployment", "Production ready", "Easy configuration"],
     }),
     deploymentRecommendations: [
-      `Ensure all environment variables are configured`,
-      `Run \`${analysis.packageManager} run build\` before deploying`,
-      `Set NODE_ENV=production in your deployment environment`,
+      "Ensure all environment variables are configured",
+      `Run \`${getRunScriptCommand(analysis.packageManager, "build")}\` before deploying`,
+      "Set NODE_ENV=production in your deployment environment",
     ],
     enhancedDescription: analysis.description,
   };

@@ -1,12 +1,12 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { RepoAnalyzer } from "@/lib/analyzer";
-import { z } from "zod";
+import { authOptions } from "@/lib/auth";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 
 const analyzeSchema = z.object({
-  owner: z.string(),
-  repo: z.string(),
+  owner: z.string().trim().min(1).max(100),
+  repo: z.string().trim().min(1).max(100),
 });
 
 export async function POST(request: Request) {
@@ -18,16 +18,25 @@ export async function POST(request: Request) {
 
   const session = await getServerSession(authOptions);
 
-  if (!session?.user || !(session.user as any).accessToken) {
+  if (!session?.user?.accessToken) {
     logger.warn("Unauthorized analyze request: missing GitHub access token");
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      logger.warn("Analyze request received invalid JSON", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const { owner, repo } = analyzeSchema.parse(body);
 
-    const token = (session.user as any).accessToken;
+    const token = session.user.accessToken;
     const analyzer = new RepoAnalyzer(token);
 
     logger.info("Analyzing repository", { owner, repo });
@@ -45,16 +54,10 @@ export async function POST(request: Request) {
     return Response.json(analysis);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        { error: "Invalid request parameters" },
-        { status: 400 }
-      );
+      return Response.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     logger.error("Failed to analyze repo", undefined, error);
-    return Response.json(
-      { error: "Failed to analyze repository" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to analyze repository" }, { status: 500 });
   }
 }

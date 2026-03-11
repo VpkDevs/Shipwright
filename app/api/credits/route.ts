@@ -1,12 +1,8 @@
-import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import {
-  getOrCreateCustomer,
-  hasActiveProSubscription,
-  getShipCredits,
-} from "@/lib/stripe";
-import type { PaymentStatus } from "@/types";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { getOrCreateCustomer, getShipCredits, hasActiveProSubscription } from "@/lib/stripe";
+import type { PaymentStatus } from "@/types";
+import { getServerSession } from "next-auth";
 
 export async function GET() {
   const requestId = generateRequestId();

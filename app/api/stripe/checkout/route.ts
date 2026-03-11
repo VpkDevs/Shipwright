@@ -1,8 +1,8 @@
-import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { stripe, STRIPE_PRICES, getOrCreateCustomer } from "@/lib/stripe";
-import { z } from "zod";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { STRIPE_PRICES, getOrCreateCustomer, stripe } from "@/lib/stripe";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 
 const checkoutSchema = z.object({
   /** Accept plan type — never trust client-supplied price IDs */
@@ -49,9 +49,7 @@ export async function POST(request: Request) {
     const customerId = await getOrCreateCustomer(email, name);
     const isSubscription = plan === "pro";
     const origin =
-      request.headers.get("origin") ||
-      process.env.NEXTAUTH_URL ||
-      "http://localhost:3000";
+      request.headers.get("origin") || process.env.NEXTAUTH_URL || "http://localhost:3000";
 
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -98,9 +96,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid request" }, { status: 400 });
     }
     logger.error("Stripe checkout error", undefined, error);
-    return Response.json(
-      { error: "Failed to create checkout session" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to create checkout session" }, { status: 500 });
   }
 }

@@ -1,16 +1,20 @@
-import type { RepoAnalysis, AgentResult, AgentStep } from "@/types";
 import { RepoAnalyzer } from "@/lib/analyzer";
-import { runOpenAIAgent } from "./openai-agent";
-import { runBlackboxAgent } from "./blackbox-agent";
-import { generateReadme } from "@/lib/generators/readme";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
-import {
-  generateVercelJsonFile,
-  generatePackageJsonScripts,
-} from "@/lib/generators/vercel-config";
+import { generateReadme } from "@/lib/generators/readme";
+import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
 import type { Logger } from "@/lib/logger";
+import type { AgentResult, AgentStep, RepoAnalysis } from "@/types";
+import { runBlackboxAgent } from "./blackbox-agent";
+import { runOpenAIAgent } from "./openai-agent";
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
+
+// simple in-memory cache for orchestration results
+const orchestratorCache = new Map<string, AgentResult>();
+
+export function clearOrchestratorCache() {
+  orchestratorCache.clear();
+}
 
 export interface OrchestratorOptions {
   owner: string;
@@ -32,11 +36,16 @@ export interface OrchestratorOptions {
  * 3. OpenAI GPT-4o-mini — README + landing page copy + recommendations
  * 4. Merge results, fall back to templates if any AI step fails
  */
-export async function runOrchestrator(
-  options: OrchestratorOptions
-): Promise<AgentResult> {
+export async function runOrchestrator(options: OrchestratorOptions): Promise<AgentResult> {
   const { owner, repo, githubToken, description, onStep, logger } = options;
-
+  const cacheKey = `${owner}/${repo}`;
+  const cached = orchestratorCache.get(cacheKey);
+  if (cached) {
+    for (const step of cached.steps) {
+      onStep?.({ ...step });
+    }
+    return cached;
+  }
   const steps: AgentStep[] = [];
   let stepCounter = 0;
 
@@ -82,10 +91,7 @@ export async function runOrchestrator(
   try {
     const analyzer = new RepoAnalyzer(githubToken);
     analysis = await analyzer.analyze(owner, repo);
-    completeStep(
-      analysisStep,
-      `${analysis.framework} · Risk: ${analysis.deploymentRiskScore}%`
-    );
+    completeStep(analysisStep, `${analysis.framework} · Risk: ${analysis.deploymentRiskScore}%`);
     orchestratorLogger?.info("Repository analysis completed", {
       framework: analysis.framework,
       packageManager: analysis.packageManager,
@@ -95,11 +101,7 @@ export async function runOrchestrator(
   } catch (err) {
     const message = String(err);
     failStep(analysisStep, message);
-    orchestratorLogger?.error(
-      "Repository analysis failed",
-      { owner, repo },
-      err
-    );
+    orchestratorLogger?.error("Repository analysis failed", { owner, repo }, err);
     throw new Error(`Repository analysis failed: ${message}`);
   }
 
@@ -179,8 +181,7 @@ export async function runOrchestrator(
           : "template";
 
   // README: prefer OpenAI, fall back to template
-  const aiReadme =
-    openaiResult?.readme || generateReadme(repo, analysis, description);
+  const aiReadme = openaiResult?.readme || generateReadme(repo, analysis, description);
 
   // Landing page: build from OpenAI copy or fall back to template
   const aiLandingPage = buildLandingPage(
@@ -191,30 +192,27 @@ export async function runOrchestrator(
   );
 
   // Vercel config: prefer Blackbox AI, fall back to static generator
-  const vercelJson =
-    blackboxResult?.vercelConfig || generateVercelJsonFile(analysis);
+  const vercelJson = blackboxResult?.vercelConfig || generateVercelJsonFile(analysis);
 
   // Env template: prefer Blackbox AI, fall back to static generator
-  const envTemplate =
-    blackboxResult?.envTemplate || generateEnvTemplate(analysis);
+  const envTemplate = blackboxResult?.envTemplate || generateEnvTemplate(analysis);
 
   // Package scripts: prefer Blackbox AI suggestions, fall back to static
   const packageJsonScripts =
     Object.keys(blackboxResult?.suggestedScripts || {}).length > 0
-      ? blackboxResult!.suggestedScripts
+      ? (blackboxResult?.suggestedScripts ?? {})
       : generatePackageJsonScripts(analysis);
 
   // Deployment recommendations
   const deploymentRecommendations =
-    openaiResult?.deploymentRecommendations ||
-    buildDefaultRecommendations(analysis);
+    openaiResult?.deploymentRecommendations || buildDefaultRecommendations(analysis);
 
   completeStep(mergeStep, `Generated via ${provider}`);
   orchestratorLogger?.info("Orchestrator finished assembling final output", {
     provider,
   });
 
-  return {
+  const result: AgentResult = {
     analysis,
     aiReadme,
     aiLandingPage,
@@ -225,6 +223,10 @@ export async function runOrchestrator(
     steps,
     provider,
   };
+
+  // simple cache to avoid rerunning agents for same repo in memory
+  orchestratorCache.set(`${owner}/${repo}`, result);
+  return result;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -235,7 +237,7 @@ interface LandingCopy {
   features?: string[];
 }
 
-function buildLandingPage(
+export function buildLandingPage(
   repoName: string,
   analysis: RepoAnalysis,
   landingPageCopyJson?: string,
@@ -252,13 +254,8 @@ function buildLandingPage(
   }
 
   const headline = copy.headline || repoName;
-  const subheadline =
-    copy.subheadline || description || analysis.description;
-  const features = copy.features || [
-    "Fast and performant",
-    "Production ready",
-    "Easy to deploy",
-  ];
+  const subheadline = copy.subheadline || description || analysis.description;
+  const features = copy.features || ["Fast and performant", "Production ready", "Easy to deploy"];
 
   // Build an enhanced landing page with AI copy
   return `<!DOCTYPE html>
@@ -366,16 +363,14 @@ function buildDefaultRecommendations(analysis: RepoAnalysis): string[] {
     recs.push("Consider adding a Dockerfile for containerized deployments");
   }
   if (analysis.deploymentRiskScore > 50) {
-    recs.push(
-      "High risk score detected — review missing configurations before deploying"
-    );
+    recs.push("High risk score detected — review missing configurations before deploying");
   }
 
   while (recs.length < 3) {
     const defaults = [
-      `Set NODE_ENV=production in your deployment environment`,
-      `Enable automatic deployments from your main branch`,
-      `Configure health check endpoints for production monitoring`,
+      "Set NODE_ENV=production in your deployment environment",
+      "Enable automatic deployments from your main branch",
+      "Configure health check endpoints for production monitoring",
     ];
     recs.push(defaults[recs.length]);
   }

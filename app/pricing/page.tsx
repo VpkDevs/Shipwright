@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useToast } from "@/lib/toast";
+import { useTheme } from "@/lib/theme";
 
 export default function PricingPage() {
+  const toast = useToast();
   const [loadingPlan, setLoadingPlan] = useState<"credit" | "pro" | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleCheckout = async (plan: "credit" | "pro") => {
     setLoadingPlan(plan);
+    setErrorMessage("");
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -18,17 +23,21 @@ export default function PricingPage() {
       const data = (await res.json()) as { url?: string; error?: string };
 
       if (!res.ok) {
-        alert(data.error || "Failed to start checkout. Please try again.");
+        const msg = data.error || "Failed to start checkout. Please try again.";
+        setErrorMessage(msg);
+        toast(msg, "error");
         return;
       }
 
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert("Failed to start checkout. Please try again.");
+        setErrorMessage("Failed to start checkout. Please try again.");
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      const msg = "Something went wrong. Please try again.";
+      setErrorMessage(msg);
+      toast(msg, "error");
     } finally {
       setLoadingPlan(null);
     }
@@ -53,13 +62,32 @@ export default function PricingPage() {
       <div className="max-w-5xl mx-auto px-6 py-20">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-5xl font-bold mb-4 text-white">
-            Ship your repo today
-          </h1>
+          <h1 className="text-5xl font-bold mb-4 text-white">Ship your repo today</h1>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-            AI-powered deployment configs, READMEs, and landing pages — generated
-            from your actual code in under 2 minutes.
+            AI-powered deployment configs, READMEs, and landing pages — generated from your actual
+            code in under 2 minutes.
           </p>
+        </div>
+
+        {errorMessage && (
+          <div className="mb-8 rounded-xl border border-red-700 bg-red-900/40 px-4 py-3 text-sm text-red-200">
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="mb-10 grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Typical output</p>
+            <p className="mt-2 text-lg font-semibold text-white">README, landing page, config</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Turnaround</p>
+            <p className="mt-2 text-lg font-semibold text-white">Usually under 2 minutes</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-wider text-slate-500">Credit safety</p>
+            <p className="mt-2 text-lg font-semibold text-white">Failures do not consume credits</p>
+          </div>
         </div>
 
         {/* Pricing Cards */}
@@ -74,9 +102,7 @@ export default function PricingPage() {
                 <span className="text-5xl font-bold text-white">$5</span>
                 <span className="text-slate-400">one-time</span>
               </div>
-              <p className="text-slate-400 mt-2 text-sm">
-                Perfect for shipping a single project
-              </p>
+              <p className="text-slate-400 mt-2 text-sm">Perfect for shipping a single project</p>
             </div>
 
             <ul className="space-y-3 mb-8 flex-1">
@@ -96,6 +122,7 @@ export default function PricingPage() {
             </ul>
 
             <button
+              type="button"
               onClick={() => handleCheckout("credit")}
               disabled={loadingPlan !== null}
               className="w-full py-3 px-6 rounded-xl font-semibold text-slate-900 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -121,9 +148,7 @@ export default function PricingPage() {
                 <span className="text-5xl font-bold text-white">$15</span>
                 <span className="text-slate-400">/month</span>
               </div>
-              <p className="text-slate-400 mt-2 text-sm">
-                For builders shipping multiple projects
-              </p>
+              <p className="text-slate-400 mt-2 text-sm">For builders shipping multiple projects</p>
             </div>
 
             <ul className="space-y-3 mb-8 flex-1">
@@ -143,6 +168,7 @@ export default function PricingPage() {
             </ul>
 
             <button
+              type="button"
               onClick={() => handleCheckout("pro")}
               disabled={loadingPlan !== null}
               className="w-full py-3 px-6 rounded-xl font-semibold text-white bg-blue-600 hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Turn dormant repos into live products in minutes",
 };
 
+import { ToastProvider } from "@/lib/toast";
+
 export default function RootLayout({
   children,
 }: {
@@ -13,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

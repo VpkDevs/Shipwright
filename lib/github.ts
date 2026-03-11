@@ -6,11 +6,13 @@ export interface FileContent {
   type: "file" | "dir";
 }
 
-export class GitHubClient {
-  private octokit: Octokit;
+export type GitHubOctokitLike = Pick<Octokit, "repos" | "git" | "pulls">;
 
-  constructor(token: string) {
-    this.octokit = new Octokit({ auth: token });
+export class GitHubClient {
+  private octokit: GitHubOctokitLike;
+
+  constructor(token: string, octokit?: GitHubOctokitLike) {
+    this.octokit = octokit ?? new Octokit({ auth: token });
   }
 
   async getUserRepos() {
@@ -22,7 +24,19 @@ export class GitHubClient {
     return data;
   }
 
-  async getRepoContents(owner: string, repo: string, path: string = "") {
+  async getRepo(owner: string, repo: string) {
+    try {
+      const { data } = await this.octokit.repos.get({
+        owner,
+        repo,
+      });
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  async getRepoContents(owner: string, repo: string, path = "") {
     try {
       const { data } = await this.octokit.repos.getContent({
         owner,
@@ -63,7 +77,7 @@ export class GitHubClient {
     }
   }
 
-  async getFileTree(owner: string, repo: string, maxDepth: number = 2) {
+  async getFileTree(owner: string, repo: string, maxDepth = 2) {
     const files: FileContent[] = [];
 
     const traverse = async (path: string, depth: number) => {
@@ -93,12 +107,7 @@ export class GitHubClient {
     return files;
   }
 
-  async createBranch(
-    owner: string,
-    repo: string,
-    branchName: string,
-    fromBranch: string = "main"
-  ) {
+  async createBranch(owner: string, repo: string, branchName: string, fromBranch = "main") {
     try {
       const { data: refData } = await this.octokit.git.getRef({
         owner,
@@ -128,6 +137,21 @@ export class GitHubClient {
     message: string
   ) {
     try {
+      let sha: string | undefined;
+
+      const existing = await this.octokit.repos
+        .getContent({
+          owner,
+          repo,
+          path,
+          ref: branch,
+        })
+        .catch(() => null);
+
+      if (existing && !Array.isArray(existing.data) && "sha" in existing.data) {
+        sha = existing.data.sha;
+      }
+
       const { data } = await this.octokit.repos.createOrUpdateFileContents({
         owner,
         repo,
@@ -135,6 +159,7 @@ export class GitHubClient {
         message,
         content: Buffer.from(content).toString("base64"),
         branch,
+        sha,
       });
 
       return data;
@@ -149,7 +174,7 @@ export class GitHubClient {
     title: string,
     body: string,
     head: string,
-    base: string = "main"
+    base = "main"
   ) {
     try {
       const { data } = await this.octokit.pulls.create({

@@ -1,9 +1,6 @@
-import { describe, expect, it } from "vitest";
-import {
-  parseAgentResponse,
-  generateFallbackResult,
-} from "@/lib/agents/openai-agent";
+import { generateFallbackResult, parseAgentResponse } from "@/lib/agents/openai-agent";
 import type { RepoAnalysis } from "@/types";
+import { describe, expect, it } from "vitest";
 
 const baseAnalysis: RepoAnalysis = {
   framework: "Next.js",
@@ -54,13 +51,31 @@ describe("openai-agent parseAgentResponse", () => {
     ]);
   });
 
+  it("parses landing copy when the model returns a JSON object", () => {
+    const content = [
+      "Here is some text:",
+      "```json",
+      '{"headline":"JSON Head","subheadline":"JSON Sub","features":["A","B","C"]}',
+      "```",
+      "And then the README:",
+      "```markdown",
+      "# Title",
+      "```",
+    ].join("\n");
+    const result = parseAgentResponse(content, baseAnalysis, "json-repo");
+    const landing = JSON.parse(result.landingPageCopy) as {
+      headline: string;
+      subheadline: string;
+      features: string[];
+    };
+    expect(landing.headline).toBe("JSON Head");
+    expect(landing.subheadline).toBe("JSON Sub");
+    expect(landing.features).toEqual(["A", "B", "C"]);
+  });
+
   it("falls back sensibly when content is missing", () => {
     const emptyContent = "";
-    const result = parseAgentResponse(
-      emptyContent,
-      baseAnalysis,
-      "fallback-repo"
-    );
+    const result = parseAgentResponse(emptyContent, baseAnalysis, "fallback-repo");
 
     expect(result.readme).toContain("# fallback-repo");
 
@@ -86,11 +101,6 @@ describe("openai-agent generateFallbackResult", () => {
       features: string[];
     };
     expect(landing.headline).toBe("Ship fallback-repo to production");
-    expect(landing.features).toEqual([
-      "Fast deployment",
-      "Production ready",
-      "Easy configuration",
-    ]);
+    expect(landing.features).toEqual(["Fast deployment", "Production ready", "Easy configuration"]);
   });
 });
-

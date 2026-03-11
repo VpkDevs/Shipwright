@@ -8,19 +8,21 @@ export interface RepoAnalysis {
   missingConfigs: string[];
   deploymentRiskScore: number;
   description: string;
-}
-
-export interface DeploymentConfig {
-  vercelJson: string;
-  packageJsonScripts: Record<string, string>;
-  envTemplate: string;
-  deploymentInstructions: string;
+  /** true if a tsconfig.json file exists */
+  usesTypeScript?: boolean;
+  /** GitHub HTML url for the repo (optional) */
+  htmlUrl?: string;
+  /** ISO timestamp of repo last update (optional) */
+  updatedAt?: string;
 }
 
 export interface GeneratedContent {
+  vercelJson: string;
+  packageJsonScripts: Record<string, string>;
+  envTemplate: string;
   readme: string;
   landingPage: string;
-  config: DeploymentConfig;
+  isAI: false;
 }
 
 export interface GithubRepo {

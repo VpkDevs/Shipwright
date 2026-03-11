@@ -1,6 +1,6 @@
+import { createLogger, generateRequestId } from "@/lib/logger";
 import { stripe } from "@/lib/stripe";
 import type Stripe from "stripe";
-import { createLogger, generateRequestId } from "@/lib/logger";
 
 export async function POST(request: Request) {
   const requestId = generateRequestId();
@@ -68,7 +68,9 @@ export async function POST(request: Request) {
         logger.info("Stripe subscription updated", {
           customer: sub.customer,
           status: sub.status,
-          currentPeriodEnd: new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000).toISOString(),
+          currentPeriodEnd: new Date(
+            (sub as unknown as { current_period_end: number }).current_period_end * 1000
+          ).toISOString(),
         });
         break;
       }

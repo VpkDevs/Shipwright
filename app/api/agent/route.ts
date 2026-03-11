@@ -1,19 +1,19 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import {
-  getOrCreateCustomer,
-  hasActiveProSubscription,
-  getShipCredits,
-  consumeShipCredit,
-} from "@/lib/stripe";
 import { runOrchestrator } from "@/lib/agents/orchestrator";
-import { z } from "zod";
+import { authOptions } from "@/lib/auth";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import {
+  consumeShipCredit,
+  getOrCreateCustomer,
+  getShipCredits,
+  hasActiveProSubscription,
+} from "@/lib/stripe";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 
 const agentSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  description: z.string().optional(),
+  owner: z.string().trim().min(1).max(100),
+  repo: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
 });
 
 export async function POST(request: Request) {
@@ -104,7 +104,11 @@ export async function POST(request: Request) {
   }
 
   // ── Run Agent ────────────────────────────────────────────────────────────
-  const githubToken = user.accessToken!;
+  const githubToken = user.accessToken;
+  if (!githubToken) {
+    logger.warn("Agent request missing GitHub access token after auth check");
+    return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
+  }
   const steps: Array<{ id: string; label: string; status: string; detail?: string }> = [];
 
   try {

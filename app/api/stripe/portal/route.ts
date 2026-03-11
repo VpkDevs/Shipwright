@@ -1,7 +1,7 @@
-import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { stripe, getOrCreateCustomer } from "@/lib/stripe";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { getOrCreateCustomer, stripe } from "@/lib/stripe";
+import { getServerSession } from "next-auth";
 
 export async function POST(request: Request) {
   const requestId = generateRequestId();
@@ -27,9 +27,7 @@ export async function POST(request: Request) {
 
     const customerId = await getOrCreateCustomer(email, user.name || "");
     const origin =
-      request.headers.get("origin") ||
-      process.env.NEXTAUTH_URL ||
-      "http://localhost:3000";
+      request.headers.get("origin") || process.env.NEXTAUTH_URL || "http://localhost:3000";
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
@@ -44,9 +42,6 @@ export async function POST(request: Request) {
     return Response.json({ url: portalSession.url });
   } catch (error) {
     logger.error("Stripe portal error", undefined, error);
-    return Response.json(
-      { error: "Failed to create portal session" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to create portal session" }, { status: 500 });
   }
 }

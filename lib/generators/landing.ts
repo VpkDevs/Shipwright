@@ -1,4 +1,4 @@
-import { RepoAnalysis } from "@/types";
+import type { RepoAnalysis } from "@/types";
 
 export function generateLandingPage(
   repoName: string,

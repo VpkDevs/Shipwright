@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
-import GitHubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GitHubProvider from "next-auth/providers/github";
 
 const isDev = process.env.NODE_ENV === "development" && process.env.DEV_MODE === "true";
 
@@ -48,7 +48,8 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).accessToken = token.accessToken || process.env.DEV_GITHUB_TOKEN || "dev-mock-token";
+        session.user.accessToken =
+          token.accessToken || process.env.DEV_GITHUB_TOKEN || "dev-mock-token";
       }
       return session;
     },

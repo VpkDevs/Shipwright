@@ -1,20 +1,17 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { RepoAnalyzer } from "@/lib/analyzer";
-import {
-  generateVercelJsonFile,
-  generatePackageJsonScripts,
-} from "@/lib/generators/vercel-config";
+import { authOptions } from "@/lib/auth";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
-import { generateReadme } from "@/lib/generators/readme";
 import { generateLandingPage } from "@/lib/generators/landing";
-import { z } from "zod";
+import { generateReadme } from "@/lib/generators/readme";
+import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 
 const generateSchema = z.object({
-  owner: z.string(),
-  repo: z.string(),
-  description: z.string().optional(),
+  owner: z.string().trim().min(1).max(100),
+  repo: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).optional(),
 });
 
 /**
@@ -39,10 +36,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      logger.warn("Generate request received invalid JSON", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const { owner, repo, description } = generateSchema.parse(body);
 
-    const token = (session.user as { accessToken?: string }).accessToken!;
+    const token = (session.user as { accessToken?: string }).accessToken;
+    if (!token) {
+      logger.warn("Generate request missing GitHub access token after auth check");
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const analyzer = new RepoAnalyzer(token);
 
     logger.info("Starting template-based generation", { owner, repo });
@@ -70,16 +80,10 @@ export async function POST(request: Request) {
     return Response.json(generated);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        { error: "Invalid request parameters" },
-        { status: 400 }
-      );
+      return Response.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     logger.error("Failed to generate template content", undefined, error);
-    return Response.json(
-      { error: "Failed to generate content" },
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to generate content" }, { status: 500 });
   }
 }

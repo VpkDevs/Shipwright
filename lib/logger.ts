@@ -12,11 +12,7 @@ export interface Logger {
   debug(message: string, meta?: Record<string, unknown>): void;
   info(message: string, meta?: Record<string, unknown>): void;
   warn(message: string, meta?: Record<string, unknown>): void;
-  error(
-    message: string,
-    meta?: Record<string, unknown>,
-    error?: unknown
-  ): void;
+  error(message: string, meta?: Record<string, unknown>, error?: unknown): void;
   child(context: Partial<LogContext>): Logger;
 }
 
@@ -85,4 +81,3 @@ export function generateRequestId(): string {
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `${timePart}-${randomPart}`;
 }
-

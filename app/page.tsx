@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useTheme } from "@/lib/theme";
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -27,7 +28,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
           <p className="text-slate-400">Loading...</p>
         </div>
       </div>
@@ -47,6 +48,16 @@ export default function Home() {
               >
                 Repos
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  const { theme, toggle } = useTheme();
+                  toggle();
+                }}
+                className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+              >
+                🌓
+              </button>
               <a
                 href="/api/auth/signout"
                 className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
@@ -114,20 +125,14 @@ export default function Home() {
 
       <div className="max-w-6xl mx-auto px-6 py-24">
         <div className="text-center mb-12">
-          <h2 className="text-5xl font-bold mb-4 text-white">
-            From Repository to Production
-          </h2>
+          <h2 className="text-5xl font-bold mb-4 text-white">From Repository to Production</h2>
           <p className="text-xl text-slate-400 mb-8">
-            Shipwright collapses the gap between your GitHub repos and deployed
-            products. Get deployment-ready configs, documentation, and landing
-            pages in minutes.
+            Shipwright collapses the gap between your GitHub repos and deployed products. Get
+            deployment-ready configs, documentation, and landing pages in minutes.
           </p>
 
           <div className="flex gap-4 justify-center flex-col sm:flex-row">
-            <a
-              href="/api/auth/signin/github"
-              className="btn-primary px-8 py-3 text-lg"
-            >
+            <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg">
               Sign In with GitHub
             </a>
             <a
@@ -136,10 +141,7 @@ export default function Home() {
             >
               Dev Login (Test Mode)
             </a>
-            <a
-              href="#features"
-              className="btn-secondary px-8 py-3 text-lg"
-            >
+            <a href="#features" className="btn-secondary px-8 py-3 text-lg">
               Learn More
             </a>
           </div>
@@ -152,8 +154,8 @@ export default function Home() {
               <div className="text-4xl mb-3">🤖</div>
               <h4 className="text-lg font-semibold mb-2">AI Code Analysis</h4>
               <p className="text-slate-400">
-                Blackbox AI reads your actual source files to understand your
-                codebase — not just package.json.
+                Blackbox AI reads your actual source files to understand your codebase — not just
+                package.json.
               </p>
             </div>
 
@@ -161,8 +163,8 @@ export default function Home() {
               <div className="text-4xl mb-3">📝</div>
               <h4 className="text-lg font-semibold mb-2">AI README</h4>
               <p className="text-slate-400">
-                GPT-4o-mini generates a professional README from your real code,
-                not a generic template.
+                GPT-4o-mini generates a professional README from your real code, not a generic
+                template.
               </p>
             </div>
 
@@ -170,8 +172,8 @@ export default function Home() {
               <div className="text-4xl mb-3">🎨</div>
               <h4 className="text-lg font-semibold mb-2">Landing Page Copy</h4>
               <p className="text-slate-400">
-                AI-written headlines and feature bullets that actually describe
-                what your project does.
+                AI-written headlines and feature bullets that actually describe what your project
+                does.
               </p>
             </div>
 
@@ -179,8 +181,8 @@ export default function Home() {
               <div className="text-4xl mb-3">⚙️</div>
               <h4 className="text-lg font-semibold mb-2">Vercel Config</h4>
               <p className="text-slate-400">
-                Production-ready vercel.json with correct framework settings,
-                build commands, and env vars.
+                Production-ready vercel.json with correct framework settings, build commands, and
+                env vars.
               </p>
             </div>
 
@@ -188,8 +190,8 @@ export default function Home() {
               <div className="text-4xl mb-3">📬</div>
               <h4 className="text-lg font-semibold mb-2">One-Click PR</h4>
               <p className="text-slate-400">
-                All generated files committed to a new branch and opened as a
-                pull request automatically.
+                All generated files committed to a new branch and opened as a pull request
+                automatically.
               </p>
             </div>
 
@@ -197,8 +199,7 @@ export default function Home() {
               <div className="text-4xl mb-3">⏱️</div>
               <h4 className="text-lg font-semibold mb-2">Under 2 Minutes</h4>
               <p className="text-slate-400">
-                From repo selection to PR-ready deployment configs in under
-                2 minutes.
+                From repo selection to PR-ready deployment configs in under 2 minutes.
               </p>
             </div>
           </div>
@@ -221,7 +222,10 @@ export default function Home() {
                 <li>✓ Vercel config + env template</li>
                 <li>✓ One-click PR creation</li>
               </ul>
-              <a href="/api/auth/signin/github" className="btn-secondary w-full text-center block text-sm">
+              <a
+                href="/api/auth/signin/github"
+                className="btn-secondary w-full text-center block text-sm"
+              >
                 Get Started
               </a>
             </div>
@@ -238,7 +242,10 @@ export default function Home() {
                 <li>✓ Priority processing</li>
                 <li>✓ Cancel anytime</li>
               </ul>
-              <a href="/api/auth/signin/github" className="btn-primary w-full text-center block text-sm">
+              <a
+                href="/api/auth/signin/github"
+                className="btn-primary w-full text-center block text-sm"
+              >
                 Start Pro
               </a>
             </div>
@@ -254,10 +261,7 @@ export default function Home() {
           <p className="text-slate-400 mb-6">
             Built for solo builders and indie developers who want to ship fast.
           </p>
-          <a
-            href="/api/auth/signin/github"
-            className="btn-primary px-8 py-3 text-lg inline-block"
-          >
+          <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg inline-block">
             Get Started Now
           </a>
         </div>

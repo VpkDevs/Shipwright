@@ -6,72 +6,78 @@ Turn dormant repos into live products in minutes.
 
 Shipwright is a web application that analyzes your GitHub repositories and generates everything you need to deploy them:
 
-- Production-ready deployment configurations (Vercel)
+- Production-ready deployment configurations for Vercel
 - Professional README files
-- Beautiful landing pages
+- Landing pages
 - Environment variable templates
-- Automated pull requests with all generated files
+- Automated pull requests with generated files
 
-**Goal**: From repository to live URL in under 15 minutes.
+Goal: from repository to live URL in under 15 minutes.
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15 with TypeScript and Tailwind CSS
-- **Authentication**: NextAuth.js with GitHub OAuth
-- **Backend**: Next.js API routes
-- **GitHub Integration**: Octokit REST API
-- **Validation**: Zod
-- **Package Manager**: Bun
-- **Code Quality**: Biome (linter + formatter)
+- Frontend: Next.js 15 with TypeScript and Tailwind CSS
+- Authentication: NextAuth.js with GitHub OAuth
+- Backend: Next.js API routes
+- GitHub Integration: Octokit REST API
+- Validation: Zod
+- Package Manager: Bun
+- Code Quality: Biome
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- Bun (installed globally)
+- Bun
 - GitHub account and OAuth app credentials
 
 ### Installation
 
-1. Clone the repository:
+1. Clone the repository.
+
 ```bash
 git clone <repo-url>
 cd shipwright
 ```
 
-2. Install dependencies with Bun:
+1. Install dependencies with Bun.
+
 ```bash
 bun install
 ```
 
-3. Set up GitHub OAuth:
-   - Go to https://github.com/settings/developers
+1. Set up GitHub OAuth.
+
+   - Go to [GitHub Developer Settings](https://github.com/settings/developers)
    - Create a new OAuth App
    - Set Authorization callback URL to `http://localhost:3000/api/auth/callback/github`
    - Copy the Client ID and Client Secret
 
-4. Configure environment variables:
+1. Configure environment variables.
+
 ```bash
 cp .env.example .env.local
 ```
 
 Edit `.env.local` and add:
-```
+
+```env
 GITHUB_ID=your_client_id
 GITHUB_SECRET=your_client_secret
-NEXTAUTH_SECRET=run: `openssl rand -base64 32` to generate
+NEXTAUTH_SECRET=run: openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000
 ```
 
 ### Development
 
 Start the development server:
+
 ```bash
 bun run dev
 ```
 
-Visit http://localhost:3000
+Visit [http://localhost:3000](http://localhost:3000).
 
 ### Build
 
@@ -93,7 +99,7 @@ bun start
 bun run format
 ```
 
-Biome will automatically format all code files according to the project's style guide.
+Biome formats code according to the project style guide.
 
 ### Linting
 
@@ -101,7 +107,7 @@ Biome will automatically format all code files according to the project's style 
 bun run lint
 ```
 
-Biome will check for code issues and apply automatic fixes where possible.
+Biome checks for issues and applies automatic fixes where possible.
 
 ### Type Checking
 
@@ -111,83 +117,83 @@ bun run type-check
 
 ## Project Structure
 
-```
+```text
 app/
-├── (auth)/               # Auth pages
-├── (dashboard)/          # Protected routes
-│   ├── repos/           # Repository listing
-│   └── repos/[...slug]/  # Individual repo analysis
 ├── api/
-│   ├── auth/            # NextAuth configuration
-│   ├── repos/           # Get user repositories
-│   ├── analyze/         # Analyze repository
-│   └── generate/        # Generate configs and content
-├── globals.css          # Global styles
-└── layout.tsx           # Root layout
+│   ├── agent/
+│   ├── analyze/
+│   ├── auth/
+│   ├── credits/
+│   ├── generate/
+│   ├── repos/
+│   └── stripe/
+├── pricing/
+├── repos/
+├── globals.css
+├── layout.tsx
+└── page.tsx
 
 lib/
-├── auth.ts              # NextAuth configuration
-├── github.ts            # GitHub API client
-├── analyzer.ts          # Repository analysis engine
-└── generators/
-    ├── vercel-config.ts # Deployment config generation
-    ├── readme.ts        # README generation
-    ├── landing.ts       # Landing page generation
-    └── env-template.ts  # Environment template generation
+├── agents/
+├── generators/
+├── analyzer.ts
+├── auth.ts
+├── github.ts
+└── stripe.ts
 
 types/
-└── index.ts             # Shared TypeScript types
-
-components/
-├── (UI components go here)
+└── index.ts
 ```
 
 ## Features
 
-### Week 1 (MVP)
-- [x] GitHub OAuth authentication
-- [x] Repository listing and selection
-- [x] Framework detection (Next.js, React, Vue, etc.)
-- [x] Package manager detection
-- [x] Environment variable detection
-- [x] Deployment risk scoring
+### Current
 
-### Week 2
-- [ ] Vercel configuration generation
-- [ ] Pull request automation
-- [ ] Deployment script generation
+- GitHub OAuth authentication
+- Repository listing and selection
+- Framework detection
+- Package manager detection from lockfiles and metadata
+- Environment variable detection
+- Deployment risk scoring
+- Free template generation
+- AI-assisted README and landing page generation
+- PR creation with generated artifacts
 
-### Week 3
-- [ ] README generation with LLM enhancement
-- [ ] Landing page templates
-- [ ] Environment variable documentation
+### Latest Enhancements
 
-### Week 4
-- [ ] Deploy integration
-- [ ] UI polish
-- [ ] Beta user testing
+- Repository analysis caching to avoid repeated GitHub API calls
+- Orchestrator caching to avoid duplicate AI runs
+- TypeScript project detection via `tsconfig.json`
+- JSON-aware OpenAI response parsing with stronger fallbacks
+- Expanded automated test coverage for analysis and generators
+- Improved repo browser with search, filters, sorting, and repo metadata
+- Better artifact ergonomics on the repo detail page with preview, copy, and download actions
+
+### Next Up
+
+- Environment variable documentation improvements
+- Deploy integration
+- Additional UI polish
+- Beta user testing
 
 ## How It Works
 
-1. **Sign in with GitHub**: Users authenticate using their GitHub account
-2. **Select Repository**: Browse and select a repository to analyze
-3. **Analysis**: Shipwright analyzes the repository:
-   - Detects framework (Next.js, React, Vue, etc.)
-   - Identifies package manager
-   - Scans for environment variables
-   - Checks for missing configurations
-   - Calculates deployment risk score
-4. **Generate**: Generate deployment configs, README, and landing page
-5. **Review**: Preview all generated content
-6. **Deploy**: Create a pull request with all changes
-7. **Ship**: Review and merge the PR, then deploy
+1. Sign in with GitHub.
+1. Select a repository to analyze.
+1. Shipwright inspects framework, package manager, environment variables, and deployment risk.
+1. Generate deployment configs, README content, and landing page assets.
+1. Review the generated output.
+1. Create a pull request with the generated files.
+1. Merge and deploy.
 
 ## API Routes
 
-### `POST /api/repos`
-Get list of authenticated user's repositories.
+### `GET /api/repos`
 
-**Response:**
+Returns the authenticated user's repositories.
+
+Response:
+
 ```json
 [
   {
@@ -195,17 +201,23 @@ Get list of authenticated user's repositories.
     "name": "my-project",
     "full_name": "username/my-project",
     "description": "My awesome project",
-    "url": "https://github.com/username/my-project",
+    "htmlUrl": "https://github.com/username/my-project",
     "language": "TypeScript",
-    "stargazers_count": 42
+    "stargazers_count": 42,
+    "private": false,
+    "fork": false,
+    "archived": false,
+    "updatedAt": "2026-03-10T00:00:00.000Z"
   }
 ]
 ```
 
 ### `POST /api/analyze`
-Analyze a repository.
 
-**Request:**
+Analyzes a repository.
+
+Request:
+
 ```json
 {
   "owner": "username",
@@ -213,25 +225,28 @@ Analyze a repository.
 }
 ```
 
-**Response:**
+Response:
+
 ```json
 {
   "framework": "Next.js",
   "packageManager": "npm",
-  "backendType": "Node.js",
+  "backendType": "Next.js API Routes",
   "hasDocker": false,
   "envVarsDetected": ["DATABASE_URL", "API_KEY"],
-  "buildScript": "npm run build",
+  "buildScript": "next build",
   "missingConfigs": [],
   "deploymentRiskScore": 15,
-  "description": "Next.js project with npm and Node.js"
+  "description": "Next.js project using npm"
 }
 ```
 
 ### `POST /api/generate`
-Generate deployment configs and content.
 
-**Request:**
+Generates template deployment assets and content.
+
+Request:
+
 ```json
 {
   "owner": "username",
@@ -240,7 +255,8 @@ Generate deployment configs and content.
 }
 ```
 
-**Response:**
+Response:
+
 ```json
 {
   "vercelJson": "{ ... }",
@@ -255,41 +271,40 @@ Generate deployment configs and content.
 
 - All API routes require GitHub authentication
 - No secrets are stored beyond the session
-- Repository read-only access only
-- Transparent PR diffs for review
-- Environment variables are never committed to the repository
+- Repository access is scoped to the authenticated user token
+- Generated changes go through a visible pull request flow
+- Environment variables are documented, not committed with secret values
 
 ## Roadmap
 
-### V1 (MVP)
+### V1
+
 - Vercel deployment only
 - Single template per generator
-- Manual PR creation required
+- Manual PR creation fallback
 
 ### V2
-- Multiple cloud providers (Railway, Fly.io, etc.)
-- Anthropic SDK integration for better content generation
+
+- Multiple cloud providers
+- Better content generation quality
 - Project portfolio dashboard
 - Automated PR merging for trusted users
 
 ### V3
+
 - Launch marketing automation
 - Analytics auto-wiring
-- Monetization integration (Stripe)
+- Monetization integration with Stripe
 - Repo health scoring
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Open a pull request if you want to improve the project.
 
 ## License
 
-MIT License - feel free to use this for your own projects
+MIT.
 
 ## Support
 
-Questions or issues? Open an issue on GitHub.
-
----
-
-**Built with ❤️ for solo builders and indie developers who want to ship fast.**
+Questions or issues can be filed on GitHub.

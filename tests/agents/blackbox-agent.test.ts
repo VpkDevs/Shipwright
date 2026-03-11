@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { extractJSON } from "@/lib/agents/blackbox-agent";
+import { describe, expect, it } from "vitest";
 
 describe("blackbox-agent extractJSON", () => {
   it("parses plain JSON strings", () => {
@@ -11,8 +11,7 @@ describe("blackbox-agent extractJSON", () => {
   });
 
   it("extracts JSON embedded in surrounding text", () => {
-    const input =
-      "prefix text\n```json\n{\"codeInsights\":\"value\"}\n```\nmore text";
+    const input = 'prefix text\n```json\n{"codeInsights":"value"}\n```\nmore text';
     const result = extractJSON(input);
     expect(result).not.toBeNull();
     expect(result?.codeInsights).toBe("value");
@@ -29,5 +28,4 @@ describe("blackbox-agent extractJSON", () => {
     const result = extractJSON(input);
     expect(result).toBeNull();
   });
-}
-
+});

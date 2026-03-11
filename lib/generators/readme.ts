@@ -1,10 +1,16 @@
-import { RepoAnalysis } from "@/types";
+import { getInstallCommand, getRunScriptCommand } from "@/lib/package-manager";
+import type { RepoAnalysis } from "@/types";
 
 export function generateReadme(
   repoName: string,
   analysis: RepoAnalysis,
   description?: string
 ): string {
+  const installCommand = getInstallCommand(analysis.packageManager);
+  const devCommand = getRunScriptCommand(analysis.packageManager, "dev");
+  const buildCommand = getRunScriptCommand(analysis.packageManager, "build");
+  const startCommand = getRunScriptCommand(analysis.packageManager, "start");
+
   const sections = [
     `# ${repoName}`,
     "",
@@ -27,32 +33,32 @@ export function generateReadme(
     "",
     "### Prerequisites",
     "",
-    `- Node.js 18+`,
+    "- Node.js 18+",
     `- ${analysis.packageManager}`,
     analysis.hasDocker ? "- Docker" : "",
     "",
     "### Installation",
     "",
     "```bash",
-    `${analysis.packageManager} install`,
+    installCommand,
     "```",
     "",
     "### Development",
     "",
     "```bash",
-    `${analysis.packageManager} run dev`,
+    devCommand,
     "```",
     "",
     "### Build",
     "",
     "```bash",
-    `${analysis.packageManager} run build`,
+    buildCommand,
     "```",
     "",
     "### Production",
     "",
     "```bash",
-    `${analysis.packageManager} start`,
+    startCommand,
     "```",
     "",
     "## Environment Variables",

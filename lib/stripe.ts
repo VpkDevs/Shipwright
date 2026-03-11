@@ -33,10 +33,7 @@ export const STRIPE_PRICES = {
 /**
  * Retrieve or create a Stripe customer for the given GitHub user email.
  */
-export async function getOrCreateCustomer(
-  email: string,
-  name?: string
-): Promise<string> {
+export async function getOrCreateCustomer(email: string, name?: string): Promise<string> {
   const existing = await stripe.customers.list({ email, limit: 1 });
   if (existing.data.length > 0) {
     return existing.data[0].id;
@@ -48,9 +45,7 @@ export async function getOrCreateCustomer(
 /**
  * Check whether a customer has an active Pro subscription.
  */
-export async function hasActiveProSubscription(
-  customerId: string
-): Promise<boolean> {
+export async function hasActiveProSubscription(customerId: string): Promise<boolean> {
   const subscriptions = await stripe.subscriptions.list({
     customer: customerId,
     status: "active",
@@ -73,10 +68,7 @@ export async function getShipCredits(customerId: string): Promise<number> {
 
   let credits = 0;
   for (const pi of payments.data) {
-    if (
-      pi.status === "succeeded" &&
-      pi.metadata?.type === "ship_credit"
-    ) {
+    if (pi.status === "succeeded" && pi.metadata?.type === "ship_credit") {
       const used = Number(pi.metadata?.used || "0");
       const qty = Number(pi.metadata?.quantity || "1");
       credits += qty - used;
@@ -96,10 +88,7 @@ export async function consumeShipCredit(customerId: string): Promise<boolean> {
   });
 
   for (const pi of payments.data) {
-    if (
-      pi.status === "succeeded" &&
-      pi.metadata?.type === "ship_credit"
-    ) {
+    if (pi.status === "succeeded" && pi.metadata?.type === "ship_credit") {
       const used = Number(pi.metadata?.used || "0");
       const qty = Number(pi.metadata?.quantity || "1");
       if (used < qty) {

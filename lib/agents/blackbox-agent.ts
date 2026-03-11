@@ -1,6 +1,7 @@
-import type { RepoAnalysis } from "@/types";
 import { GitHubClient } from "@/lib/github";
 import type { Logger } from "@/lib/logger";
+import { getInstallCommand, getRunScriptCommand } from "@/lib/package-manager";
+import type { RepoAnalysis } from "@/types";
 
 const BLACKBOX_API_URL = "https://api.blackbox.ai/api/chat";
 const BLACKBOX_MODEL = "blackboxai";
@@ -71,9 +72,7 @@ async function callBlackbox(
     throw new Error("Unexpected Blackbox API response format");
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error(
-        `Blackbox API request timed out after ${timeoutMs}ms`
-      );
+      throw new Error(`Blackbox API request timed out after ${timeoutMs}ms`);
     }
     throw err instanceof Error ? err : new Error(String(err));
   } finally {
@@ -121,11 +120,7 @@ export async function runBlackboxAgent(
   });
 
   // Read package.json for deep analysis
-  const packageJsonContent = await github.getFileContent(
-    owner,
-    repo,
-    "package.json"
-  );
+  const packageJsonContent = await github.getFileContent(owner, repo, "package.json");
 
   // Try to read main entry point
   const entryFiles = [
@@ -192,21 +187,12 @@ Provide a JSON response with exactly this structure:
   let suggestedScripts: Record<string, string> = {};
 
   try {
-    const analysisResponse = await callBlackbox(
-      [{ role: "user", content: analysisPrompt }],
-      1500
-    );
+    const analysisResponse = await callBlackbox([{ role: "user", content: analysisPrompt }], 1500);
 
     const parsed = extractJSON(analysisResponse);
     if (parsed) {
-      codeInsights =
-        typeof parsed.codeInsights === "string"
-          ? parsed.codeInsights
-          : "";
-      riskAssessment =
-        typeof parsed.riskAssessment === "string"
-          ? parsed.riskAssessment
-          : "";
+      codeInsights = typeof parsed.codeInsights === "string" ? parsed.codeInsights : "";
+      riskAssessment = typeof parsed.riskAssessment === "string" ? parsed.riskAssessment : "";
       suggestedScripts =
         parsed.suggestedScripts &&
         typeof parsed.suggestedScripts === "object" &&
@@ -218,18 +204,12 @@ Provide a JSON response with exactly this structure:
       });
     } else {
       codeInsights = analysisResponse.slice(0, 300);
-      agentLogger?.warn(
-        "Blackbox analysis did not return valid JSON, using raw text snippet"
-      );
+      agentLogger?.warn("Blackbox analysis did not return valid JSON, using raw text snippet");
     }
   } catch (err) {
     const message = String(err);
     onStep?.("Blackbox AI: Analysis warning", message);
-    agentLogger?.error(
-      "Blackbox analysis step failed, using heuristic fallback",
-      undefined,
-      err
-    );
+    agentLogger?.error("Blackbox analysis step failed, using heuristic fallback", undefined, err);
     codeInsights = `${analysis.framework} project analyzed. ${
       analysis.missingConfigs.length > 0
         ? "Some configurations are missing."
@@ -238,10 +218,7 @@ Provide a JSON response with exactly this structure:
   }
 
   // Step 3: Generate Vercel config
-  onStep?.(
-    "Blackbox AI: Generating Vercel config",
-    "Creating deployment config"
-  );
+  onStep?.("Blackbox AI: Generating Vercel config", "Creating deployment config");
   agentLogger?.info("Calling Blackbox for vercel.json generation");
 
   const vercelPrompt = `Generate a production-ready vercel.json for this project:
@@ -253,16 +230,11 @@ Return ONLY valid JSON for vercel.json, no explanation.`;
 
   let vercelConfig = "";
   try {
-    const vercelResponse = await callBlackbox(
-      [{ role: "user", content: vercelPrompt }],
-      500
-    );
+    const vercelResponse = await callBlackbox([{ role: "user", content: vercelPrompt }], 500);
 
     // Extract JSON from response
     const jsonMatch = vercelResponse.match(/\{[\s\S]*\}/);
-    vercelConfig = jsonMatch
-      ? jsonMatch[0]
-      : generateDefaultVercelConfig(analysis);
+    vercelConfig = jsonMatch ? jsonMatch[0] : generateDefaultVercelConfig(analysis);
     agentLogger?.info("Blackbox vercel.json generation completed", {
       usedFallback: !jsonMatch,
     });
@@ -287,10 +259,7 @@ Return ONLY the .env.example content with helpful comments, no explanation.`;
 
   let envTemplate = "";
   try {
-    envTemplate = await callBlackbox(
-      [{ role: "user", content: envPrompt }],
-      400
-    );
+    envTemplate = await callBlackbox([{ role: "user", content: envPrompt }], 400);
     // Clean up any markdown code blocks
     envTemplate = envTemplate.replace(/```[a-z]*\n?/g, "").trim();
     agentLogger?.info("Blackbox env template generation completed");
@@ -335,10 +304,10 @@ export function extractJSON(text: string): Record<string, unknown> | null {
 function generateDefaultVercelConfig(analysis: RepoAnalysis): string {
   const config: Record<string, unknown> = {
     framework: getVercelFramework(analysis.framework),
-    buildCommand: analysis.buildScript || "npm run build",
+    buildCommand: analysis.buildScript || getRunScriptCommand(analysis.packageManager, "build"),
     outputDirectory: getOutputDir(analysis.framework),
-    installCommand: `${analysis.packageManager} install`,
-    devCommand: `${analysis.packageManager} run dev`,
+    installCommand: getInstallCommand(analysis.packageManager),
+    devCommand: getRunScriptCommand(analysis.packageManager, "dev"),
   };
 
   if (analysis.envVarsDetected.length > 0) {
