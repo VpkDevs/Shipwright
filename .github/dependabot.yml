@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Node.js dependencies (npm/bun)
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+    open-pull-requests-limit: 5
+    pull-request-branch-name:
+      separator: "/"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    reviewers:
+      - VpkDevs
+    labels:
+      - dependencies
+      - auto
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:30"
+    pull-request-branch-name:
+      separator: "/"
+    commit-message:
+      prefix: "ci(deps)"

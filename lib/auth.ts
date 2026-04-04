@@ -10,7 +10,9 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GITHUB_ID || "",
       clientSecret: process.env.GITHUB_SECRET || "",
       allowDangerousEmailAccountLinking: true,
-      scope: "repo,user",
+      authorization: {
+        params: { scope: "repo user" },
+      },
     }),
     ...(isDev
       ? [
@@ -69,10 +71,6 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user, account, profile, isNewUser }) {
       console.log("SignIn event:", { user, account, profile, isNewUser });
-    },
-    async redirect({ url, baseUrl }) {
-      console.log("Redirect event:", { url, baseUrl });
-      return url.startsWith(baseUrl) ? url : baseUrl;
     },
   },
   pages: {

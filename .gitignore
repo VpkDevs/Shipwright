@@ -11,3 +11,6 @@ build/
 .idea/
 .vscode/
 *.swp
+tsconfig.tsbuildinfo
+tsc-errors.txt
+tsc-output.txt

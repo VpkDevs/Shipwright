@@ -7,7 +7,14 @@
       "Bash(bun run build:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git checkout:*)",
+      "mcp__Desktop_Commander__read_file"
     ]
   }
 }
