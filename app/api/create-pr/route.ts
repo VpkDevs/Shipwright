@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
     const client = new GitHubClient(session.user.accessToken);
     const branch = branchName || `shipwright/deploy-${Date.now()}`;
-    const base = baseBranch || "main";
+    const base = baseBranch || (await client.getDefaultBranch(owner, repo));
 
     // Create a new branch
     const newBranch = await client.createBranch(owner, repo, branch, base);

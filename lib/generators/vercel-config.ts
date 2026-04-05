@@ -19,7 +19,7 @@ export function generateVercelConfig(analysis: RepoAnalysis): string {
   if (analysis.envVarsDetected.length > 0) {
     config.env = analysis.envVarsDetected.reduce(
       (acc, envVar) => {
-        acc[envVar] = `@${envVar.toLowerCase()}`;
+        acc[envVar] = `@${envVar}`;
         return acc;
       },
       {} as Record<string, string>
@@ -88,11 +88,11 @@ export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<strin
       scripts.dev = "next dev";
     } else if (analysis.framework === "React") {
       scripts.build = "vite build";
-      scripts.start = "vite preview";
+      scripts.start = "vite build && vite preview";
       scripts.dev = "vite";
     } else if (analysis.framework === "Vue") {
       scripts.build = "vite build";
-      scripts.start = "vite preview";
+      scripts.start = "vite build && vite preview";
       scripts.dev = "vite";
     }
   }

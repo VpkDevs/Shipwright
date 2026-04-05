@@ -119,7 +119,7 @@ export class GitHubClient {
         owner,
         repo,
         ref: `refs/heads/${branchName}`,
-        sha,
+        sha: sha as string,
       });
 
       return newRef;
@@ -169,6 +169,11 @@ export class GitHubClient {
       console.error(`Failed to create/update file "${path}":`, err);
       return null;
     }
+  }
+
+  async getDefaultBranch(owner: string, repo: string): Promise<string> {
+    const { data } = await this.octokit.repos.get({ owner, repo });
+    return data.default_branch;
   }
 
   async createPullRequest(

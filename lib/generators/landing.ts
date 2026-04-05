@@ -16,7 +16,7 @@ export function generateLandingPage(
   description?: string
 ): string {
   const safeRepoName = escapeHtml(repoName);
-  const safeDescription = escapeHtml(description || analysis.description);
+  const safeDescription = escapeHtml(description ?? analysis.description ?? "");
   const githubUrl = `https://github.com/${escapeHtml(owner)}/${escapeHtml(repoName)}`;
   const currentYear = new Date().getFullYear();
 
