@@ -1,16 +1,31 @@
-import { RepoAnalysis } from "@/types";
+import type { RepoAnalysis } from "@/types";
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 export function generateLandingPage(
+  owner: string,
   repoName: string,
   analysis: RepoAnalysis,
   description?: string
 ): string {
+  const safeRepoName = escapeHtml(repoName);
+  const safeDescription = escapeHtml(description || analysis.description);
+  const githubUrl = `https://github.com/${escapeHtml(owner)}/${escapeHtml(repoName)}`;
+  const currentYear = new Date().getFullYear();
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${repoName}</title>
+  <title>${safeRepoName}</title>
   <style>
     * {
       margin: 0;
@@ -86,6 +101,7 @@ export function generateLandingPage(
       gap: 1rem;
       justify-content: center;
       margin-top: 2rem;
+      flex-wrap: wrap;
     }
 
     .btn {
@@ -200,20 +216,21 @@ export function generateLandingPage(
 <body>
   <header>
     <nav>
-      <h1>${repoName}</h1>
+      <h1>${safeRepoName}</h1>
       <div>
         <a href="#features">Features</a>
         <a href="#tech">Tech Stack</a>
+        <a href="${githubUrl}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
     </nav>
   </header>
 
   <section class="hero">
-    <h1>${repoName}</h1>
-    <p>${description || analysis.description}</p>
+    <h1>${safeRepoName}</h1>
+    <p>${safeDescription}</p>
     <div class="cta-buttons">
-      <a href="https://github.com" class="btn btn-primary">View on GitHub</a>
-      <a href="#" class="btn btn-secondary">Get Started</a>
+      <a href="${githubUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">View on GitHub</a>
+      <a href="#features" class="btn btn-secondary">Learn More</a>
     </div>
   </section>
 
@@ -238,9 +255,9 @@ export function generateLandingPage(
       <div id="tech" class="tech-stack">
         <h3>Tech Stack</h3>
         <div class="tech-badges">
-          <span class="badge">${analysis.framework}</span>
-          <span class="badge">${analysis.packageManager}</span>
-          <span class="badge">${analysis.backendType}</span>
+          <span class="badge">${escapeHtml(analysis.framework)}</span>
+          <span class="badge">${escapeHtml(analysis.packageManager)}</span>
+          ${analysis.backendType !== "Frontend" ? `<span class="badge">${escapeHtml(analysis.backendType)}</span>` : ""}
           ${analysis.hasDocker ? '<span class="badge">Docker</span>' : ""}
         </div>
       </div>
@@ -248,7 +265,7 @@ export function generateLandingPage(
   </section>
 
   <footer>
-    <p>&copy; 2024 ${repoName}. Built with Shipwright.</p>
+    <p>&copy; ${currentYear} ${safeRepoName}. Built with <a href="https://github.com/VpkDevs/Shipwright" style="color: #a78bfa;">Shipwright</a>.</p>
   </footer>
 </body>
 </html>`;

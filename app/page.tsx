@@ -27,7 +27,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
           <p className="text-slate-400">Loading...</p>
         </div>
       </div>
@@ -114,32 +114,17 @@ export default function Home() {
 
       <div className="max-w-6xl mx-auto px-6 py-24">
         <div className="text-center mb-12">
-          <h2 className="text-5xl font-bold mb-4 text-white">
-            From Repository to Production
-          </h2>
+          <h2 className="text-5xl font-bold mb-4 text-white">From Repository to Production</h2>
           <p className="text-xl text-slate-400 mb-8">
-            Shipwright collapses the gap between your GitHub repos and deployed
-            products. Get deployment-ready configs, documentation, and landing
-            pages in minutes.
+            Shipwright collapses the gap between your GitHub repos and deployed products. Get
+            deployment-ready configs, documentation, and landing pages in minutes.
           </p>
 
           <div className="flex gap-4 justify-center flex-col sm:flex-row">
-            <a
-              href="/api/auth/signin/github"
-              className="btn-primary px-8 py-3 text-lg"
-            >
+            <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg">
               Sign In with GitHub
             </a>
-            <a
-              href="/api/auth/signin/credentials?token=dev-mode-active"
-              className="btn-secondary px-8 py-3 text-lg"
-            >
-              Dev Login (Test Mode)
-            </a>
-            <a
-              href="#features"
-              className="btn-secondary px-8 py-3 text-lg"
-            >
+            <a href="#features" className="btn-secondary px-8 py-3 text-lg">
               Learn More
             </a>
           </div>
@@ -152,8 +137,7 @@ export default function Home() {
               <div className="text-4xl mb-3">🔍</div>
               <h4 className="text-lg font-semibold mb-2">Repo Analysis</h4>
               <p className="text-slate-400">
-                Automatically detect your framework, dependencies, and
-                deployment requirements.
+                Automatically detect your framework, dependencies, and deployment requirements.
               </p>
             </div>
 
@@ -161,8 +145,8 @@ export default function Home() {
               <div className="text-4xl mb-3">⚡</div>
               <h4 className="text-lg font-semibold mb-2">Config Generation</h4>
               <p className="text-slate-400">
-                Generate Vercel configs, environment templates, and deployment
-                scripts automatically.
+                Generate Vercel configs, environment templates, and deployment scripts
+                automatically.
               </p>
             </div>
 
@@ -170,8 +154,7 @@ export default function Home() {
               <div className="text-4xl mb-3">📝</div>
               <h4 className="text-lg font-semibold mb-2">Documentation</h4>
               <p className="text-slate-400">
-                Get production-ready READMEs and landing pages generated from
-                your repo.
+                Get production-ready READMEs and landing pages generated from your repo.
               </p>
             </div>
 
@@ -179,8 +162,7 @@ export default function Home() {
               <div className="text-4xl mb-3">🚀</div>
               <h4 className="text-lg font-semibold mb-2">PR Ready</h4>
               <p className="text-slate-400">
-                All changes packaged into a single pull request for your
-                review.
+                All changes packaged into a single pull request for your review.
               </p>
             </div>
 
@@ -204,13 +186,9 @@ export default function Home() {
 
         <div className="mt-20 text-center">
           <p className="text-slate-400 mb-6">
-            Shipwright is built for solo builders and indie developers who want
-            to ship fast.
+            Shipwright is built for solo builders and indie developers who want to ship fast.
           </p>
-          <a
-            href="/api/auth/signin/github"
-            className="btn-primary px-8 py-3 text-lg inline-block"
-          >
+          <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg inline-block">
             Get Started Now
           </a>
         </div>

@@ -1,4 +1,4 @@
-import { RepoAnalysis } from "@/types";
+import type { RepoAnalysis } from "@/types";
 
 export function generateEnvTemplate(analysis: RepoAnalysis): string {
   if (analysis.envVarsDetected.length === 0) {
@@ -10,12 +10,7 @@ export function generateEnvTemplate(analysis: RepoAnalysis): string {
     return `${envVar}=${hint}`;
   });
 
-  return (
-    "# Environment variables\n" +
-    "# Copy this file to .env.local and fill in the values\n\n" +
-    lines.join("\n") +
-    "\n"
-  );
+  return `# Environment variables\n# Copy this file to .env.local and fill in the values\n\n${lines.join("\n")}\n`;
 }
 
 function getEnvVarHint(envVar: string): string {

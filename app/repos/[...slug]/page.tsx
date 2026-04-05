@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
 import type { RepoAnalysis } from "@/types";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface GeneratedContent {
   vercelJson: string;
@@ -11,6 +11,12 @@ interface GeneratedContent {
   envTemplate: string;
   readme: string;
   landingPage: string;
+}
+
+interface PRResult {
+  url: string;
+  number: number;
+  title: string;
 }
 
 export default function RepoPage() {
@@ -24,6 +30,9 @@ export default function RepoPage() {
     "overview"
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCreatingPR, setIsCreatingPR] = useState(false);
+  const [prResult, setPRResult] = useState<PRResult | null>(null);
+  const [prError, setPRError] = useState("");
 
   const slug = params?.slug;
   const owner = Array.isArray(slug) ? slug[0] : slug;
@@ -85,6 +94,55 @@ export default function RepoPage() {
     }
   };
 
+  const handleCreatePR = async () => {
+    if (!owner || !repo || !generated || isCreatingPR) return;
+
+    setIsCreatingPR(true);
+    setPRError("");
+
+    const files: Array<{ path: string; content: string }> = [];
+
+    if (generated.vercelJson) {
+      files.push({ path: "vercel.json", content: generated.vercelJson });
+    }
+    if (generated.envTemplate) {
+      files.push({ path: ".env.example", content: generated.envTemplate });
+    }
+    if (generated.readme) {
+      files.push({ path: "README.md", content: generated.readme });
+    }
+    if (generated.landingPage) {
+      files.push({ path: "landing/index.html", content: generated.landingPage });
+    }
+    if (Object.keys(generated.packageJsonScripts).length > 0) {
+      files.push({
+        path: "shipwright-scripts.json",
+        content: JSON.stringify({ scripts: generated.packageJsonScripts }, null, 2),
+      });
+    }
+
+    try {
+      const res = await fetch("/api/create-pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner, repo, files }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to create PR");
+      }
+
+      const data = await res.json();
+      setPRResult(data);
+    } catch (err) {
+      setPRError(err instanceof Error ? err.message : "Failed to create pull request");
+      console.error(err);
+    } finally {
+      setIsCreatingPR(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
@@ -98,7 +156,7 @@ export default function RepoPage() {
 
         <div className="max-w-6xl mx-auto px-6 py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
             <p className="text-slate-400">Analyzing repository...</p>
           </div>
         </div>
@@ -188,7 +246,7 @@ export default function RepoPage() {
                       style={{
                         width: `${analysis.deploymentRiskScore}%`,
                       }}
-                    ></div>
+                    />
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
                     {analysis.deploymentRiskScore}% risk
@@ -219,11 +277,12 @@ export default function RepoPage() {
               </div>
 
               <button
+                type="button"
                 onClick={handleGenerate}
                 disabled={isGenerating || !!generated}
                 className="btn-primary w-full mt-6 disabled:opacity-50"
               >
-                {isGenerating ? "Generating..." : "Generate Content"}
+                {isGenerating ? "Generating..." : generated ? "Generated ✓" : "Generate Content"}
               </button>
             </div>
           </div>
@@ -241,10 +300,9 @@ export default function RepoPage() {
             ) : (
               <>
                 <div className="flex gap-2 mb-6 border-b border-slate-700">
-                  {(
-                    ["overview", "readme", "landing", "config"] as const
-                  ).map((tab) => (
+                  {(["overview", "readme", "landing", "config"] as const).map((tab) => (
                     <button
+                      type="button"
                       key={tab}
                       onClick={() => setActiveTab(tab)}
                       className={`px-4 py-2 font-medium text-sm transition-colors ${
@@ -264,7 +322,7 @@ export default function RepoPage() {
                       <div>
                         <h3 className="text-sm text-slate-500 mb-2">Vercel Config</h3>
                         <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-green-400">
-                          {generated.vercelJson || "{}"}
+                          {generated.vercelJson || "Not applicable for this framework"}
                         </pre>
                       </div>
                       <div>
@@ -278,19 +336,21 @@ export default function RepoPage() {
 
                   {activeTab === "readme" && (
                     <div className="prose prose-invert max-w-none text-sm">
-                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96">
+                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96 whitespace-pre-wrap">
                         {generated.readme}
                       </pre>
                     </div>
                   )}
 
                   {activeTab === "landing" && (
-                    <div className="bg-slate-900 p-4 rounded">
-                      <p className="text-slate-400 text-sm mb-4">
-                        Landing page preview (HTML file generated)
+                    <div className="space-y-4">
+                      <p className="text-slate-400 text-sm">
+                        Landing page HTML — will be saved as{" "}
+                        <code className="bg-slate-700 px-1 rounded">landing/index.html</code>
                       </p>
-                      <pre className="text-xs overflow-x-auto text-slate-300 max-h-96">
-                        {generated.landingPage.substring(0, 500)}...
+                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96">
+                        {generated.landingPage.substring(0, 1000)}
+                        {generated.landingPage.length > 1000 ? "\n... (truncated)" : ""}
                       </pre>
                     </div>
                   )}
@@ -298,18 +358,50 @@ export default function RepoPage() {
                   {activeTab === "config" && (
                     <div className="space-y-4">
                       <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Scripts</h3>
-                        <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-blue-400">
-                          {JSON.stringify(generated.packageJsonScripts, null, 2)}
-                        </pre>
+                        <h3 className="text-sm text-slate-500 mb-2">Suggested Scripts</h3>
+                        {Object.keys(generated.packageJsonScripts).length > 0 ? (
+                          <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-blue-400">
+                            {JSON.stringify(generated.packageJsonScripts, null, 2)}
+                          </pre>
+                        ) : (
+                          <p className="text-slate-400 text-sm">
+                            No missing scripts detected — your package.json already has the required
+                            scripts.
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
 
-                <button className="btn-primary w-full mt-6">
-                  Create Pull Request
-                </button>
+                {prResult ? (
+                  <div className="mt-6 bg-green-900/50 border border-green-700 rounded-lg p-4">
+                    <p className="text-green-400 font-semibold mb-1">✓ Pull Request Created!</p>
+                    <p className="text-green-300 text-sm mb-3">
+                      PR #{prResult.number}: {prResult.title}
+                    </p>
+                    <a
+                      href={prResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-primary inline-block"
+                    >
+                      View Pull Request →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="mt-6">
+                    {prError && <p className="text-red-400 text-sm mb-3">{prError}</p>}
+                    <button
+                      type="button"
+                      onClick={handleCreatePR}
+                      disabled={isCreatingPR}
+                      className="btn-primary w-full disabled:opacity-50"
+                    >
+                      {isCreatingPR ? "Creating Pull Request..." : "🚢 Create Pull Request"}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

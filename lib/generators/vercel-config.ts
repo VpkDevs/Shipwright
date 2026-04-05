@@ -1,18 +1,25 @@
-import { RepoAnalysis } from "@/types";
+import type { RepoAnalysis } from "@/types";
+
+interface VercelConfig {
+  buildCommand?: string;
+  outputDirectory?: string;
+  installCommand?: string;
+  devCommand?: string;
+  framework?: string;
+  env?: Record<string, string>;
+}
 
 export function generateVercelConfig(analysis: RepoAnalysis): string {
-  const config: Record<string, unknown> = {
-    buildCommand: analysis.buildScript
-      ? `npm run ${analysis.buildScript.replace("npm run ", "")}`
-      : "npm run build",
+  const config: VercelConfig = {
+    buildCommand: analysis.buildScript || "npm run build",
     outputDirectory: getOutputDirectory(analysis.framework),
-    framework: getFrameworkConfig(analysis.framework),
+    framework: getFrameworkConfig(analysis.framework) || undefined,
   };
 
   if (analysis.envVarsDetected.length > 0) {
     config.env = analysis.envVarsDetected.reduce(
       (acc, envVar) => {
-        acc[envVar] = "@" + envVar;
+        acc[envVar] = `@${envVar.toLowerCase()}`;
         return acc;
       },
       {} as Record<string, string>
@@ -60,23 +67,18 @@ export function generateVercelJsonFile(analysis: RepoAnalysis): string {
     return "";
   }
 
-  const config = {
-    buildCommand: analysis.buildScript ? "npm run build" : undefined,
+  const config: VercelConfig = {
+    buildCommand: analysis.buildScript || "npm run build",
     outputDirectory: ".next",
-    installCommand: "npm install",
-    devCommand: "npm run dev",
+    installCommand: `${analysis.packageManager} install`,
+    devCommand: `${analysis.packageManager === "npm" ? "npm run" : analysis.packageManager} dev`,
     framework: "nextjs",
   };
 
-  return JSON.stringify(Object.fromEntries(
-    Object.entries(config).filter(([, value]) => value !== undefined)
-  ), null, 2);
+  return JSON.stringify(config, null, 2);
 }
 
-export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<
-  string,
-  string
-> {
+export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<string, string> {
   const scripts: Record<string, string> = {};
 
   if (!analysis.buildScript) {
@@ -86,7 +88,11 @@ export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<
       scripts.dev = "next dev";
     } else if (analysis.framework === "React") {
       scripts.build = "vite build";
-      scripts.start = "npm run build && npm run preview";
+      scripts.start = "vite preview";
+      scripts.dev = "vite";
+    } else if (analysis.framework === "Vue") {
+      scripts.build = "vite build";
+      scripts.start = "vite preview";
       scripts.dev = "vite";
     }
   }

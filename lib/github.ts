@@ -22,7 +22,7 @@ export class GitHubClient {
     return data;
   }
 
-  async getRepoContents(owner: string, repo: string, path: string = "") {
+  async getRepoContents(owner: string, repo: string, path = "") {
     try {
       const { data } = await this.octokit.repos.getContent({
         owner,
@@ -63,7 +63,7 @@ export class GitHubClient {
     }
   }
 
-  async getFileTree(owner: string, repo: string, maxDepth: number = 2) {
+  async getFileTree(owner: string, repo: string, maxDepth = 2) {
     const files: FileContent[] = [];
 
     const traverse = async (path: string, depth: number) => {
@@ -80,12 +80,12 @@ export class GitHubClient {
             files.push({
               path: item.path,
               type: item.type,
-              content: item.name,
+              content: "",
             });
           }
         }
-      } catch {
-        return;
+      } catch (err) {
+        console.error(`Failed to traverse path "${path}":`, err);
       }
     };
 
@@ -93,28 +93,38 @@ export class GitHubClient {
     return files;
   }
 
-  async createBranch(
-    owner: string,
-    repo: string,
-    branchName: string,
-    fromBranch: string = "main"
-  ) {
+  async createBranch(owner: string, repo: string, branchName: string, fromBranch = "main") {
     try {
-      const { data: refData } = await this.octokit.git.getRef({
-        owner,
-        repo,
-        ref: `heads/${fromBranch}`,
-      });
+      // Try to get the ref from the specified base branch; fall back to HEAD
+      let sha: string | undefined;
+      try {
+        const { data: refData } = await this.octokit.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${fromBranch}`,
+        });
+        sha = refData.object.sha;
+      } catch {
+        // Base branch not found, try to get the default branch HEAD
+        const { data: repoData } = await this.octokit.repos.get({ owner, repo });
+        const { data: refData } = await this.octokit.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${repoData.default_branch}`,
+        });
+        sha = refData.object.sha;
+      }
 
       const { data: newRef } = await this.octokit.git.createRef({
         owner,
         repo,
         ref: `refs/heads/${branchName}`,
-        sha: refData.object.sha,
+        sha,
       });
 
       return newRef;
-    } catch {
+    } catch (err) {
+      console.error("Failed to create branch:", err);
       return null;
     }
   }
@@ -128,6 +138,22 @@ export class GitHubClient {
     message: string
   ) {
     try {
+      // Check if the file already exists to get its SHA (required for updates)
+      let fileSha: string | undefined;
+      try {
+        const { data } = await this.octokit.repos.getContent({
+          owner,
+          repo,
+          path,
+          ref: branch,
+        });
+        if (!Array.isArray(data) && "sha" in data) {
+          fileSha = data.sha;
+        }
+      } catch {
+        // File doesn't exist yet, that's fine
+      }
+
       const { data } = await this.octokit.repos.createOrUpdateFileContents({
         owner,
         repo,
@@ -135,10 +161,12 @@ export class GitHubClient {
         message,
         content: Buffer.from(content).toString("base64"),
         branch,
+        ...(fileSha ? { sha: fileSha } : {}),
       });
 
       return data;
-    } catch {
+    } catch (err) {
+      console.error(`Failed to create/update file "${path}":`, err);
       return null;
     }
   }
@@ -149,7 +177,7 @@ export class GitHubClient {
     title: string,
     body: string,
     head: string,
-    base: string = "main"
+    base = "main"
   ) {
     try {
       const { data } = await this.octokit.pulls.create({
@@ -162,7 +190,8 @@ export class GitHubClient {
       });
 
       return data;
-    } catch {
+    } catch (err) {
+      console.error("Failed to create pull request:", err);
       return null;
     }
   }
