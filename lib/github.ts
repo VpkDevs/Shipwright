@@ -73,9 +73,10 @@ export class GitHubClient {
         const contents = await this.getRepoContents(owner, repo, path);
         if (!Array.isArray(contents)) return;
 
+        const subdirs: string[] = [];
         for (const item of contents) {
           if (item.type === "dir" && depth < maxDepth) {
-            await traverse(item.path, depth + 1);
+            subdirs.push(item.path);
           } else if (item.type === "file") {
             files.push({
               path: item.path,
@@ -83,6 +84,10 @@ export class GitHubClient {
               content: "",
             });
           }
+        }
+
+        if (subdirs.length > 0) {
+          await Promise.all(subdirs.map((dir) => traverse(dir, depth + 1)));
         }
       } catch (err) {
         console.error(`Failed to traverse path "${path}":`, err);
@@ -115,11 +120,15 @@ export class GitHubClient {
         sha = refData.object.sha;
       }
 
+      if (!sha) {
+        throw new Error("Failed to resolve branch SHA");
+      }
+
       const { data: newRef } = await this.octokit.git.createRef({
         owner,
         repo,
         ref: `refs/heads/${branchName}`,
-        sha: sha as string,
+        sha,
       });
 
       return newRef;
