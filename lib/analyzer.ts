@@ -94,6 +94,18 @@ export class RepoAnalyzer {
       }
     }
 
+    // Also scan common source files for process.env.X references
+    const sourceFiles = ["src/env.ts", "src/env.js", "env.ts", "env.js", "src/config.ts"];
+    for (const file of sourceFiles) {
+      const content = await this.client.getFileContent(owner, repo, file);
+      if (content) {
+        const matches = content.matchAll(/process\.env\.([A-Z_][A-Z0-9_]*)/g);
+        for (const match of matches) {
+          vars.add(match[1]);
+        }
+      }
+    }
+
     return Array.from(vars);
   }
 
@@ -104,14 +116,31 @@ export class RepoAnalyzer {
 
     const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 
+    // Full-stack / meta-frameworks (check before base frameworks)
     if (deps.next) return "Next.js";
-    if (deps.react) return "React";
-    if (deps.vue) return "Vue";
-    if (deps.svelte) return "Svelte";
     if (deps.nuxt) return "Nuxt";
     if (deps.gatsby) return "Gatsby";
     if (deps["@remix-run/node"] || deps["@remix-run/react"]) return "Remix";
     if (deps.astro) return "Astro";
+    if (deps["@solidjs/start"] || deps["solid-start"]) return "SolidStart";
+    if (deps["@sveltejs/kit"]) return "SvelteKit";
+    if (deps["@angular/core"]) return "Angular";
+    if (deps.qwik || deps["@builder.io/qwik"]) return "Qwik";
+
+    // Base frameworks
+    if (deps.react) return "React";
+    if (deps.vue) return "Vue";
+    if (deps.svelte) return "Svelte";
+    if (deps["solid-js"]) return "Solid.js";
+    if (deps.preact) return "Preact";
+
+    // API frameworks
+    if (deps.hono) return "Hono";
+    if (deps.elysia) return "Elysia";
+    if (deps.express) return "Express";
+    if (deps.fastify) return "Fastify";
+    if (deps["@nestjs/core"]) return "NestJS";
+    if (deps.koa) return "Koa";
 
     return "Node.js";
   }
@@ -134,6 +163,9 @@ export class RepoAnalyzer {
     const lockFileChecks = await Promise.all([
       this.client
         .getFileContent(owner, repo, "bun.lockb")
+        .then((r) => ({ pm: "bun", exists: r !== null })),
+      this.client
+        .getFileContent(owner, repo, "bun.lock")
         .then((r) => ({ pm: "bun", exists: r !== null })),
       this.client
         .getFileContent(owner, repo, "pnpm-lock.yaml")
@@ -160,11 +192,17 @@ export class RepoAnalyzer {
 
     const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 
+    if (deps["@nestjs/core"]) return "NestJS";
     if (deps.express) return "Express";
     if (deps.fastify) return "Fastify";
     if (deps["@hapi/hapi"] || deps.hapi) return "Hapi";
     if (deps.koa) return "Koa";
-    if (deps["@nestjs/core"]) return "NestJS";
+    if (deps.hono) return "Hono";
+    if (deps.elysia) return "Elysia";
+
+    // ORM / database indicators mean there's a backend layer
+    if (deps.prisma || deps["@prisma/client"]) return "Node.js (Prisma)";
+    if (deps.drizzle || deps["drizzle-orm"]) return "Node.js (Drizzle)";
 
     return "Frontend";
   }
@@ -194,6 +232,20 @@ export class RepoAnalyzer {
       }
     }
 
+    if (framework === "SvelteKit") {
+      const hasSvelteConfig = fileList.some((f) => /^svelte\.config\.(js|ts)$/.test(f));
+      if (!hasSvelteConfig) {
+        missing.push("svelte.config.js");
+      }
+    }
+
+    if (framework === "Astro") {
+      const hasAstroConfig = fileList.some((f) => /^astro\.config\.(js|ts|mjs|cjs)$/.test(f));
+      if (!hasAstroConfig) {
+        missing.push("astro.config.mjs");
+      }
+    }
+
     return missing;
   }
 
@@ -203,16 +255,14 @@ export class RepoAnalyzer {
     envVarsCount: number;
     missingConfigsCount: number;
   }): number {
-    const MISSING_BUILD_SCRIPT_PENALTY = 20;
-    const NO_DOCKER_PENALTY = 10;
-    const MISSING_CONFIG_PENALTY = 5;
+    const MISSING_BUILD_SCRIPT_PENALTY = 25;
+    const MISSING_CONFIG_PENALTY = 8;
     const MANY_ENV_VARS_PENALTY = 15;
     const MANY_ENV_VARS_THRESHOLD = 5;
 
     let score = 0;
 
     if (!params.buildScript) score += MISSING_BUILD_SCRIPT_PENALTY;
-    if (!params.hasDocker) score += NO_DOCKER_PENALTY;
     if (params.missingConfigsCount > 0)
       score += params.missingConfigsCount * MISSING_CONFIG_PENALTY;
     if (params.envVarsCount > MANY_ENV_VARS_THRESHOLD) score += MANY_ENV_VARS_PENALTY;

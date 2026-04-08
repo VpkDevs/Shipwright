@@ -35,10 +35,16 @@ function getOutputDirectory(framework: string): string {
       return ".next";
     case "React":
     case "Vite":
+    case "Solid.js":
+    case "Preact":
       return "dist";
     case "Gatsby":
       return "public";
     case "Nuxt":
+    case "SvelteKit":
+    case "SolidStart":
+      return ".output";
+    case "Astro":
       return "dist";
     default:
       return "dist";
@@ -53,27 +59,38 @@ function getFrameworkConfig(framework: string): string {
       return "react";
     case "Vue":
       return "vue";
+    case "Nuxt":
+      return "nuxtjs";
     case "Svelte":
       return "svelte";
+    case "SvelteKit":
+      return "sveltekit";
     case "Astro":
       return "astro";
+    case "Angular":
+      return "angular";
+    case "Gatsby":
+      return "gatsby";
+    case "Remix":
+      return "remix";
     default:
       return "";
   }
 }
 
 export function generateVercelJsonFile(analysis: RepoAnalysis): string {
-  if (analysis.framework !== "Next.js") {
-    return "";
-  }
+  const frameworkConfig = getFrameworkConfig(analysis.framework);
 
   const config: VercelConfig = {
     buildCommand: analysis.buildScript || "npm run build",
-    outputDirectory: ".next",
+    outputDirectory: getOutputDirectory(analysis.framework),
     installCommand: `${analysis.packageManager} install`,
     devCommand: `${analysis.packageManager === "npm" ? "npm run" : analysis.packageManager} dev`,
-    framework: "nextjs",
   };
+
+  if (frameworkConfig) {
+    config.framework = frameworkConfig;
+  }
 
   return JSON.stringify(config, null, 2);
 }
@@ -86,16 +103,63 @@ export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<strin
       scripts.build = "next build";
       scripts.start = "next start";
       scripts.dev = "next dev";
-    } else if (analysis.framework === "React") {
+    } else if (
+      analysis.framework === "React" ||
+      analysis.framework === "Vue" ||
+      analysis.framework === "Solid.js" ||
+      analysis.framework === "Preact"
+    ) {
       scripts.build = "vite build";
       scripts.start = "vite build && vite preview";
       scripts.dev = "vite";
-    } else if (analysis.framework === "Vue") {
+    } else if (analysis.framework === "SvelteKit") {
       scripts.build = "vite build";
-      scripts.start = "vite build && vite preview";
-      scripts.dev = "vite";
+      scripts.start = "node build";
+      scripts.dev = "vite dev";
+    } else if (analysis.framework === "Astro") {
+      scripts.build = "astro build";
+      scripts.start = "astro preview";
+      scripts.dev = "astro dev";
+    } else if (analysis.framework === "Remix") {
+      scripts.build = "remix build";
+      scripts.start = "remix-serve ./build/server/index.js";
+      scripts.dev = "remix dev";
     }
   }
 
   return scripts;
+}
+
+export function generateRailwayConfig(analysis: RepoAnalysis): string {
+  const buildCommand = analysis.buildScript || "npm run build";
+  const startCommand = (() => {
+    switch (analysis.framework) {
+      case "Next.js":
+        return `${analysis.packageManager === "npm" ? "npm run" : analysis.packageManager} start`;
+      case "Remix":
+        return "node ./build/server/index.js";
+      default:
+        return `${analysis.packageManager === "npm" ? "npm run" : analysis.packageManager} start`;
+    }
+  })();
+
+  const lines = [
+    "[build]",
+    `builder = "NIXPACKS"`,
+    `buildCommand = "${buildCommand}"`,
+    "",
+    "[deploy]",
+    `startCommand = "${startCommand}"`,
+    `restartPolicyType = "ON_FAILURE"`,
+    "restartPolicyMaxRetries = 10",
+  ];
+
+  if (analysis.envVarsDetected.length > 0) {
+    lines.push("", "[env]");
+    for (const envVar of analysis.envVarsDetected) {
+      lines.push(`${envVar} = ""`);
+    }
+  }
+
+  return lines.join("\n");
 }

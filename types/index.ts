@@ -12,6 +12,7 @@ export interface RepoAnalysis {
 
 export interface DeploymentConfig {
   vercelJson: string;
+  railwayToml: string;
   packageJsonScripts: Record<string, string>;
   envTemplate: string;
   deploymentInstructions: string;
