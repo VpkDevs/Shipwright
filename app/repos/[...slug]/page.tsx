@@ -1,17 +1,9 @@
 "use client";
 
-import type { RepoAnalysis } from "@/types";
+import type { GeneratedContent, RepoAnalysis } from "@/types";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
-interface GeneratedContent {
-  vercelJson: string;
-  packageJsonScripts: Record<string, string>;
-  envTemplate: string;
-  readme: string;
-  landingPage: string;
-}
 
 interface PRResult {
   url: string;
@@ -39,7 +31,11 @@ export default function RepoPage() {
   const repo = Array.isArray(slug) ? slug[1] : undefined;
 
   useEffect(() => {
-    if (!owner || !repo) return;
+    if (!owner || !repo) {
+      setError("Invalid repository URL");
+      setIsLoading(false);
+      return;
+    }
 
     const analyze = async () => {
       try {
