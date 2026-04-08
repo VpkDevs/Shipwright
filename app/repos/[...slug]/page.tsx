@@ -418,9 +418,6 @@ export default function RepoPage() {
                   Click &quot;Generate Content&quot; to create deployment configs, README, and
                   landing page for <span className="text-blue-400 font-mono">{repo}</span>.
                 </p>
-                {!!process.env.NEXT_PUBLIC_AI_ENABLED && (
-                  <p className="text-xs text-purple-400">✨ AI-enhanced generation enabled</p>
-                )}
               </div>
             ) : (
               <>

@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
     const analysis = await analyzer.analyze(owner, repo);
 
-    const baseReadme = generateReadme(repo, analysis, description);
+    const baseReadme = generateReadme(repo, owner, analysis, description);
     const baseLanding = generateLandingPage(owner, repo, analysis, description);
 
     const { readme, landingPage } = await enhanceWithAI(

@@ -33,6 +33,7 @@ function getPackageManagerBadge(pm: string): string {
 
 export function generateReadme(
   repoName: string,
+  owner: string,
   analysis: RepoAnalysis,
   description?: string
 ): string {
@@ -47,9 +48,11 @@ export function generateReadme(
 
   const frameworkBadge = getFrameworkBadge(analysis.framework);
   const pmBadge = getPackageManagerBadge(analysis.packageManager);
-  const licenceBadge = "![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)";
+  const licenseBadge = "![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)";
 
-  const badges = [frameworkBadge, pmBadge, licenceBadge].filter(Boolean).join(" ");
+  const badges = [frameworkBadge, pmBadge, licenseBadge].filter(Boolean).join(" ");
+
+  const repoUrl = `https://github.com/${owner}/${repoName}`;
 
   const sections = [
     `# ${repoName}`,
@@ -84,7 +87,7 @@ export function generateReadme(
     "",
     "1. Clone the repository:",
     "```bash",
-    `git clone https://github.com/<your-username>/${repoName}.git`,
+    `git clone ${repoUrl}.git`,
     `cd ${repoName}`,
     "```",
     "",
@@ -134,7 +137,7 @@ export function generateReadme(
     "",
     "### Vercel (Recommended)",
     "",
-    "[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/<your-username>/${repoName})",
+    `[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=${repoUrl})`,
     "",
     "Or deploy manually:",
     "",
@@ -168,7 +171,7 @@ export function generateReadme(
     "",
     "## Support",
     "",
-    "If you have any questions or run into issues, please [open an issue](https://github.com/<your-username>/${repoName}/issues).",
+    `If you have any questions or run into issues, please [open an issue](${repoUrl}/issues).`,
     "",
     "---",
     "",
