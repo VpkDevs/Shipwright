@@ -99,6 +99,8 @@ export function generateReadme(
     ...(analysis.envVarsDetected.length > 0
       ? [
           "3. Set up environment variables:",
+          "",
+          "   An `.env.example` file is included with the required variable names. Copy it and fill in the values:",
           "```bash",
           "cp .env.example .env.local",
           "```",

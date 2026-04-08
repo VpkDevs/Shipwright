@@ -497,7 +497,7 @@ export default function RepoPage() {
                           ref={iframeRef}
                           title="Landing page preview"
                           className="w-full h-96 rounded border border-slate-600"
-                          sandbox="allow-same-origin"
+                          sandbox="allow-same-origin allow-scripts"
                         />
                       ) : (
                         <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96">

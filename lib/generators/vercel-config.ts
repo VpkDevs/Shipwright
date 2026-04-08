@@ -44,8 +44,6 @@ function getOutputDirectory(framework: string): string {
     case "SvelteKit":
     case "SolidStart":
       return ".output";
-    case "Astro":
-      return "dist";
     default:
       return "dist";
   }
