@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@upstash/ratelimit", () => {
   const mockRatelimit = vi.fn(function (this: any) {
@@ -10,7 +10,7 @@ vi.mock("@upstash/ratelimit", () => {
       resetAfterMs: 60000,
     }));
   });
-  mockRatelimit.slidingWindow = vi.fn(() => ({}));
+  (mockRatelimit as any).slidingWindow = vi.fn(() => ({}));
   return {
     Ratelimit: mockRatelimit,
   };

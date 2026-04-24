@@ -30,7 +30,7 @@ export class RateLimitError extends AppError {
     super(
       429,
       `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
-      `Rate limit exceeded for user`
+      "Rate limit exceeded for user"
     );
     this.retryAfter = retryAfter;
     this.name = "RateLimitError";
@@ -45,7 +45,10 @@ export class DatabaseError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(public field: string, message: string) {
+  constructor(
+    public field: string,
+    message: string
+  ) {
     super(400, `Invalid ${field}: ${message}`, message);
     this.name = "ValidationError";
   }

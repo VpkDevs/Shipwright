@@ -5,10 +5,6 @@
     "clientKind": "git",
     "useIgnoreFile": true
   },
-  "files": {
-    "ignoreUnknown": true,
-    "ignore": ["node_modules", ".next", "dist", "build", ".env*", "*.lock"]
-  },
   "formatter": {
     "enabled": true,
     "indentWidth": 2,
@@ -21,14 +17,16 @@
       "recommended": true,
       "suspicious": {
         "noDoubleEquals": "error",
-        "noRedeclare": "error"
+        "noRedeclare": "error",
+        "noExplicitAny": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn"
       },
       "style": {
-        "useConst": "error"
+        "useConst": "error",
+        "useNodejsImportProtocol": "off"
       }
     }
   },

@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateContentWithGemini } from "@/lib/gemini-generator";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@google/generative-ai", () => ({
-  GoogleGenerativeAI: vi.fn(function () {
+  GoogleGenerativeAI: vi.fn(function (this: any) {
     this.getGenerativeModel = vi.fn(() => ({
       generateContent: vi.fn(async () => ({
         response: {
@@ -75,13 +75,7 @@ describe("Gemini Generator", () => {
   });
 
   it("returns null on error (fallback)", async () => {
-    const result = await generateContentWithGemini(
-      "app",
-      "owner",
-      "next",
-      [],
-      "test"
-    );
+    const result = await generateContentWithGemini("app", "owner", "next", [], "test");
     expect(result === null || result?.readme !== undefined).toBe(true);
   });
 });

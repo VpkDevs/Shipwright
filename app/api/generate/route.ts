@@ -1,48 +1,85 @@
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { repositories } from "@/lib/db/schema";
+import { RateLimitError, ValidationError } from "@/lib/errors";
+import { generateContentWithGemini } from "@/lib/gemini-generator";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
 import { generateLandingPage } from "@/lib/generators/landing";
 import { generateReadme } from "@/lib/generators/readme";
 import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { withErrorHandler } from "@/lib/with-error-handler";
+import { eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
 const generateSchema = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),
+  repoId: z.string().optional(),
   description: z.string().optional(),
 });
 
-export async function POST(request: Request) {
+export const POST = withErrorHandler(async (request: Request) => {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.accessToken) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.email) {
+    throw new ValidationError("auth", "Not authenticated");
   }
 
-  try {
-    const body = await request.json();
-    const { owner, repo, description } = generateSchema.parse(body);
+  if (!session.user.accessToken) {
+    throw new ValidationError("auth", "Missing access token");
+  }
 
-    const analyzer = new RepoAnalyzer(session.user.accessToken);
+  const rateLimitResult = await checkRateLimit(session.user.email, "/api/generate");
+  if (!rateLimitResult.success) {
+    throw new RateLimitError(rateLimitResult.retryAfter || 60);
+  }
 
-    const analysis = await analyzer.analyze(owner, repo);
+  const body = await request.json();
+  const { owner, repo, repoId, description } = generateSchema.parse(body);
 
-    const generated = {
-      vercelJson: generateVercelJsonFile(analysis),
-      packageJsonScripts: generatePackageJsonScripts(analysis),
-      envTemplate: generateEnvTemplate(analysis),
-      readme: generateReadme(repo, analysis, description),
-      landingPage: generateLandingPage(owner, repo, analysis, description),
-    };
+  const analyzer = new RepoAnalyzer(session.user.accessToken);
+  const analysis = await analyzer.analyze(owner, repo);
 
-    return Response.json(generated);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return Response.json({ error: "Invalid request parameters" }, { status: 400 });
+  const db = getDb();
+
+  // Try to load cached analysis from DB
+  let cachedRepo: any = null;
+  if (repoId) {
+    try {
+      const [repo] = await db
+        .select()
+        .from(repositories)
+        .where(eq(repositories.github_repo_id, repoId));
+      cachedRepo = repo;
+    } catch (_e) {
+      // DB lookup failed, continue with defaults
     }
-
-    console.error("Failed to generate content:", error);
-    return Response.json({ error: "Failed to generate content" }, { status: 500 });
   }
-}
+
+  // Generate with Gemini (with fallback to templates)
+  const framework = cachedRepo?.framework || (analysis as any).framework || "unknown";
+  const deps = (analysis as any).packageJson?.dependencies
+    ? Object.keys((analysis as any).packageJson.dependencies).slice(0, 5)
+    : [];
+  const readinessSummary = cachedRepo?.readinessSummary || "Repository analysis";
+
+  const generated = await generateContentWithGemini(repo, owner, framework, deps, readinessSummary);
+
+  // Fallback if Gemini fails
+  const finalGenerated = {
+    vercelJson: generateVercelJsonFile(analysis),
+    packageJsonScripts: generatePackageJsonScripts(analysis),
+    envTemplate: generated?.envTemplate || generateEnvTemplate(analysis),
+    readme: generated?.readme || generateReadme(repo, analysis, description),
+    landingPage:
+      generated?.landingPageCopy || generateLandingPage(owner, repo, analysis, description),
+  };
+
+  return new Response(JSON.stringify(finalGenerated), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+});

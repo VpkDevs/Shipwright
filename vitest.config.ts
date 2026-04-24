@@ -1,5 +1,5 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
-import path from "path";
 
 export default defineConfig({
   test: {
@@ -10,10 +10,12 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       include: ["lib/**/*.ts", "app/api/**/*.ts"],
       exclude: ["**/*.test.ts", "**/*.d.ts"],
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80,
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
     },
   },
   resolve: {

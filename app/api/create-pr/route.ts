@@ -1,11 +1,17 @@
 import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { pull_requests } from "@/lib/db/schema";
+import { GithubApiError, RateLimitError, ValidationError } from "@/lib/errors";
 import { GitHubClient } from "@/lib/github";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { withErrorHandler } from "@/lib/with-error-handler";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
 const createPRSchema = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),
+  repoId: z.string().optional(),
   files: z.array(
     z.object({
       path: z.string().min(1),
@@ -16,17 +22,26 @@ const createPRSchema = z.object({
   baseBranch: z.string().min(1).optional(),
 });
 
-export async function POST(request: Request) {
+export const POST = withErrorHandler(async (request: Request) => {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.accessToken) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user?.email) {
+    throw new ValidationError("auth", "Not authenticated");
   }
 
-  try {
-    const body = await request.json();
-    const { owner, repo, files, branchName, baseBranch } = createPRSchema.parse(body);
+  if (!session.user.accessToken) {
+    throw new ValidationError("auth", "Missing access token");
+  }
 
+  const rateLimitResult = await checkRateLimit(session.user.email, "/api/create-pr");
+  if (!rateLimitResult.success) {
+    throw new RateLimitError(rateLimitResult.retryAfter || 60);
+  }
+
+  const body = await request.json();
+  const { owner, repo, repoId, files, branchName, baseBranch } = createPRSchema.parse(body);
+
+  try {
     const client = new GitHubClient(session.user.accessToken);
     const branch = branchName || `shipwright/deploy-${Date.now()}`;
     const base = baseBranch || (await client.getDefaultBranch(owner, repo));
@@ -34,10 +49,7 @@ export async function POST(request: Request) {
     // Create a new branch
     const newBranch = await client.createBranch(owner, repo, branch, base);
     if (!newBranch) {
-      return Response.json(
-        { error: "Failed to create branch. Check that the base branch exists." },
-        { status: 500 }
-      );
+      throw new GithubApiError("Failed to create branch. Check that the base branch exists.");
     }
 
     // Commit each file to the new branch
@@ -51,7 +63,7 @@ export async function POST(request: Request) {
         `chore: add ${file.path} via Shipwright`
       );
       if (!result) {
-        return Response.json({ error: `Failed to commit file: ${file.path}` }, { status: 500 });
+        throw new GithubApiError(`Failed to commit file: ${file.path}`);
       }
     }
 
@@ -74,20 +86,41 @@ export async function POST(request: Request) {
 
     const pr = await client.createPullRequest(owner, repo, prTitle, prBody, branch, base);
     if (!pr) {
-      return Response.json({ error: "Failed to create pull request" }, { status: 500 });
+      throw new GithubApiError("Failed to create pull request");
     }
 
-    return Response.json({
-      url: pr.html_url,
-      number: pr.number,
-      title: pr.title,
-    });
+    // Log PR to DB
+    const db = getDb();
+    if (repoId) {
+      try {
+        await db.insert(pull_requests).values({
+          repo_id: repoId as any,
+          pr_number: pr.number,
+          pr_url: pr.html_url,
+          branch_name: branch,
+          status: "open",
+          generated_files: files.map((f) => f.path),
+        });
+      } catch (_e) {
+        // Silently fail DB insert
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        url: pr.html_url,
+        number: pr.number,
+        title: pr.title,
+      }),
+      {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json({ error: "Invalid request parameters" }, { status: 400 });
+      throw new ValidationError("request", "Invalid request parameters");
     }
-
-    console.error("Failed to create PR:", error);
-    return Response.json({ error: "Failed to create pull request" }, { status: 500 });
+    throw error;
   }
-}
+});
