@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { formatDate, formatRelative } from "@/lib/utils";
+import { describe, expect, it } from "vitest";
 
 describe("utils date formatting", () => {
   it("formatDate returns a readable date string", () => {

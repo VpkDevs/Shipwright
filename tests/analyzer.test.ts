@@ -148,9 +148,9 @@ describe("analyzeRepositorySnapshot", () => {
         filePaths: ["package-lock.json", "src/main.tsx", ".env.local"],
         fileContents: {
           "src/main.tsx": [
-            'const mode = process.env.NODE_ENV;',
+            "const mode = process.env.NODE_ENV;",
             'const secret = process.env["STRIPE_SECRET_KEY"];',
-            'const apiUrl = import.meta.env.VITE_API_URL;',
+            "const apiUrl = import.meta.env.VITE_API_URL;",
           ].join("\n"),
           ".env.local": "NODE_ENV=development\nPUBLIC_FLAG=true\n",
         },

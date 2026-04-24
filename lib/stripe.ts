@@ -28,6 +28,10 @@ export const STRIPE_PRICES = {
   credit: process.env.STRIPE_PRICE_CREDIT || "",
   /** $15/month Pro subscription */
   pro: process.env.STRIPE_PRICE_PRO || "",
+  /** Discounted yearly Pro subscription */
+  proAnnual: process.env.STRIPE_PRICE_PRO_ANNUAL || "",
+  /** Team subscription for agencies or internal dev platforms */
+  team: process.env.STRIPE_PRICE_TEAM || "",
 } as const;
 
 /**
@@ -51,8 +55,11 @@ export async function hasActiveProSubscription(customerId: string): Promise<bool
     status: "active",
     limit: 10,
   });
+  const recurringPriceIds = [STRIPE_PRICES.pro, STRIPE_PRICES.proAnnual, STRIPE_PRICES.team].filter(
+    Boolean
+  );
   return subscriptions.data.some((sub) =>
-    sub.items.data.some((item) => item.price.id === STRIPE_PRICES.pro)
+    sub.items.data.some((item) => recurringPriceIds.includes(item.price.id))
   );
 }
 

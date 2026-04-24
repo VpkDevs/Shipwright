@@ -67,7 +67,18 @@ GITHUB_ID=your_client_id
 GITHUB_SECRET=your_client_secret
 NEXTAUTH_SECRET=run: openssl rand -base64 32
 NEXTAUTH_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_CREDIT=price_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_PRO_ANNUAL=price_...
+STRIPE_PRICE_TEAM=price_...
+ANALYTICS_STORAGE_PATH=.data/analytics/events.jsonl
 ```
+
+For billing, create four Stripe prices: a one-time Ship Credit, Pro Monthly, Pro Annual, and Team Launch.
+
+For local development, keep the Stripe values on test-mode keys and test-mode prices.
 
 ### Development
 
@@ -90,6 +101,20 @@ bun run build
 ```bash
 bun start
 ```
+
+For production, set all four Stripe values to live-mode prices in your hosting provider's environment settings:
+
+```env
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_CREDIT=price_live_credit
+STRIPE_PRICE_PRO=price_live_pro_monthly
+STRIPE_PRICE_PRO_ANNUAL=price_live_pro_annual
+STRIPE_PRICE_TEAM=price_live_team
+ANALYTICS_STORAGE_PATH=/var/lib/shipwright/analytics/events.jsonl
+```
+
+If you deploy on a stateless platform, point `ANALYTICS_STORAGE_PATH` at a mounted persistent volume. The built-in analytics persistence is file-backed, so it needs writable persistent storage to retain history across instance restarts.
 
 ## Code Quality
 
@@ -158,6 +183,8 @@ types/
 - Free template generation
 - AI-assisted README and landing page generation
 - PR creation with generated artifacts
+- One-time, monthly, annual, and team billing paths via Stripe
+- Persistent funnel analytics for pricing and paywall interactions
 
 ### Latest Enhancements
 
@@ -187,6 +214,19 @@ types/
 1. Merge and deploy.
 
 ## API Routes
+
+### `GET /api/analytics`
+
+Returns the most recent persisted analytics events for an authenticated session.
+
+Query parameters:
+
+- `limit` — optional, defaults to `100`, max `500`
+- `name` — optional event name filter
+
+### `POST /api/analytics`
+
+Persists a funnel analytics event to the server-side JSONL store and logs it for observability.
 
 ### `GET /api/repos`
 

@@ -1,5 +1,6 @@
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
+import { generateGitHubActionsWorkflow } from "@/lib/generators/github-actions";
 import { generateReadme } from "@/lib/generators/readme";
 import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
 import type { Logger } from "@/lib/logger";
@@ -212,6 +213,9 @@ export async function runOrchestrator(options: OrchestratorOptions): Promise<Age
     provider,
   });
 
+  // GitHub Actions CI/CD workflow — individually tailored to detected stack
+  const githubActionsWorkflow = generateGitHubActionsWorkflow(analysis);
+
   const result: AgentResult = {
     analysis,
     aiReadme,
@@ -220,6 +224,7 @@ export async function runOrchestrator(options: OrchestratorOptions): Promise<Age
     packageJsonScripts,
     envTemplate,
     deploymentRecommendations,
+    githubActionsWorkflow,
     steps,
     provider,
   };

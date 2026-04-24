@@ -1,6 +1,7 @@
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { authOptions } from "@/lib/auth";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
@@ -15,6 +16,17 @@ export async function POST(request: Request) {
     requestId,
     route: "POST /api/analyze",
   });
+
+  // Rate limiting check
+  const headers = request.headers;
+  const clientIp = getClientIp(headers);
+  const rateLimitKey = `analyze:${clientIp}`;
+  const rateLimitResult = checkRateLimit(rateLimitKey, "analyze");
+
+  if (!rateLimitResult.allowed) {
+    logger.warn("Analyze request rate limited", { clientIp });
+    return rateLimitResponse(rateLimitResult.remaining, rateLimitResult.reset);
+  }
 
   const session = await getServerSession(authOptions);
 

@@ -6,9 +6,36 @@ import { z } from "zod";
 
 const checkoutSchema = z.object({
   /** Accept plan type — never trust client-supplied price IDs */
-  plan: z.enum(["credit", "pro"]),
+  plan: z.enum(["credit", "pro", "proAnnual", "team"]),
   repoFullName: z.string().optional(),
 });
+
+const PLAN_CONFIG = {
+  credit: {
+    priceId: STRIPE_PRICES.credit,
+    mode: "payment" as const,
+    type: "ship_credit",
+    quantity: "1",
+  },
+  pro: {
+    priceId: STRIPE_PRICES.pro,
+    mode: "subscription" as const,
+    type: "pro_subscription",
+    quantity: "1",
+  },
+  proAnnual: {
+    priceId: STRIPE_PRICES.proAnnual,
+    mode: "subscription" as const,
+    type: "pro_annual_subscription",
+    quantity: "1",
+  },
+  team: {
+    priceId: STRIPE_PRICES.team,
+    mode: "subscription" as const,
+    type: "team_subscription",
+    quantity: "1",
+  },
+} as const;
 
 export async function POST(request: Request) {
   const requestId = generateRequestId();
@@ -36,8 +63,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "User email required" }, { status: 400 });
     }
 
-    // Look up price ID server-side — never trust client
-    const priceId = plan === "pro" ? STRIPE_PRICES.pro : STRIPE_PRICES.credit;
+    const planConfig = PLAN_CONFIG[plan];
+    const { priceId, mode, type, quantity } = planConfig;
 
     if (!priceId) {
       return Response.json(
@@ -47,7 +74,7 @@ export async function POST(request: Request) {
     }
 
     const customerId = await getOrCreateCustomer(email, name);
-    const isSubscription = plan === "pro";
+    const isSubscription = mode === "subscription";
     const origin =
       request.headers.get("origin") || process.env.NEXTAUTH_URL || "http://localhost:3000";
 
@@ -55,27 +82,29 @@ export async function POST(request: Request) {
       customer: customerId,
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      mode: isSubscription ? "subscription" : "payment",
+      mode,
       success_url: `${origin}/repos${
         repoFullName ? `/${repoFullName}?payment=success` : "?payment=success"
       }`,
       cancel_url: `${origin}/pricing?payment=cancelled`,
       metadata: {
-        type: isSubscription ? "pro_subscription" : "ship_credit",
-        quantity: "1",
+        type,
+        quantity,
         used: "0",
         repoFullName: repoFullName || "",
         userId: email,
+        plan,
       },
       ...(!isSubscription
         ? {
             payment_intent_data: {
               metadata: {
-                type: "ship_credit",
-                quantity: "1",
+                type,
+                quantity,
                 used: "0",
                 repoFullName: repoFullName || "",
                 userId: email,
+                plan,
               },
             },
           }
@@ -87,7 +116,7 @@ export async function POST(request: Request) {
       customerId,
       email,
       repoFullName: repoFullName || undefined,
-      mode: isSubscription ? "subscription" : "payment",
+      mode,
     });
 
     return Response.json({ url: checkoutSession.url });

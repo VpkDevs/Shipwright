@@ -5,6 +5,7 @@ import { generateLandingPage } from "@/lib/generators/landing";
 import { generateReadme } from "@/lib/generators/readme";
 import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
 import { createLogger, generateRequestId } from "@/lib/logger";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
 
@@ -27,6 +28,17 @@ export async function POST(request: Request) {
     requestId,
     route: "POST /api/generate",
   });
+
+  // Rate limiting check
+  const headers = request.headers;
+  const clientIp = getClientIp(headers);
+  const rateLimitKey = `generate:${clientIp}`;
+  const rateLimitResult = checkRateLimit(rateLimitKey, "generate");
+
+  if (!rateLimitResult.allowed) {
+    logger.warn("Generate request rate limited", { clientIp });
+    return rateLimitResponse(rateLimitResult.remaining, rateLimitResult.reset);
+  }
 
   const session = await getServerSession(authOptions);
 

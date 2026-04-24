@@ -1,5 +1,9 @@
+import {
+  getInstallCommand,
+  getRunScriptCommand,
+  normalizePackageManager,
+} from "@/lib/package-manager";
 import { describe, expect, it } from "vitest";
-import { normalizePackageManager, getInstallCommand, getRunScriptCommand } from "@/lib/package-manager";
 
 describe("package-manager helpers", () => {
   it("normalizes known managers", () => {

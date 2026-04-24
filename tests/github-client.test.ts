@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
 import type { GitHubOctokitLike } from "@/lib/github";
 import { GitHubClient } from "@/lib/github";
+import { describe, expect, it, vi } from "vitest";
 
 function createMockOctokit() {
   return {

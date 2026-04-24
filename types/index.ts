@@ -72,25 +72,28 @@ export interface AgentResult {
   packageJsonScripts: Record<string, string>;
   envTemplate: string;
   deploymentRecommendations: string[];
+  /** GitHub Actions CI/CD workflow YAML — paid/AI-only artifact */
+  githubActionsWorkflow: string;
   steps: AgentStep[];
   provider: "openai" | "blackbox" | "template";
 }
 
 // ─── Payment / Billing Types ─────────────────────────────────────────────────
 
+/** Access tier returned by the billing status endpoint. All recurring subscriptions map to `pro`. */
 export type PlanType = "none" | "credit" | "pro";
 
 export interface PaymentStatus {
   plan: PlanType;
   /** Remaining one-time ship credits */
   credits: number;
-  /** ISO date string for Pro subscription expiry */
+  /** ISO date string for recurring subscription expiry */
   proExpiresAt?: string;
   stripeCustomerId?: string;
 }
 
 export interface CheckoutSessionRequest {
-  priceId: string;
+  plan: "credit" | "pro" | "proAnnual" | "team";
   /** owner/repo being shipped — stored in metadata */
   repoFullName?: string;
 }
