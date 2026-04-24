@@ -1,1 +1,12 @@
-// Placeholder - will be implemented in Task 3
+import { drizzle } from "drizzle-orm/vercel-postgres";
+import { sql } from "@vercel/postgres";
+import * as schema from "./schema";
+
+let db: ReturnType<typeof drizzle> | null = null;
+
+export function getDb() {
+  if (!db) {
+    db = drizzle(sql, { schema });
+  }
+  return db;
+}
