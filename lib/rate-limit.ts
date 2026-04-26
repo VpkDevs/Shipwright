@@ -5,7 +5,16 @@ import { log } from "./logger";
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 const hasRedisConfig = Boolean(redisUrl && redisToken);
-const redis = hasRedisConfig ? new Redis({ url: redisUrl, token: redisToken }) : null;
+
+function createRedisClient() {
+  if (!redisUrl || !redisToken) {
+    return null;
+  }
+
+  return new Redis({ url: redisUrl, token: redisToken });
+}
+
+const redis = hasRedisConfig ? createRedisClient() : null;
 
 const limits = {
   "/api/repos": { requests: 30, window: "1 m" },
@@ -63,6 +72,14 @@ export interface RateLimitResult {
   retryAfter?: number;
 }
 
+interface UpstashLimitResult {
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset?: number;
+  resetAfterMs?: number;
+}
+
 export async function checkRateLimit(userId: string, route: string): Promise<RateLimitResult> {
   const ratelimit = getRateLimit(route);
 
@@ -73,9 +90,9 @@ export async function checkRateLimit(userId: string, route: string): Promise<Rat
   const key = `${userId}:${route}`;
 
   try {
-    const result = await ratelimit.limit(key);
+    const result = (await ratelimit.limit(key)) as UpstashLimitResult;
 
-    const resetMs = (result as any).resetAfterMs || (result as any).reset || 0;
+    const resetMs = result.resetAfterMs || result.reset || 0;
     const resetSeconds = resetMs ? Math.ceil(resetMs / 1000) : 0;
 
     return {
