@@ -36,9 +36,7 @@ Return ONLY valid JSON (no markdown, no backticks):
 
     const result = (await Promise.race([
       model.generateContent(prompt),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Gemini timeout")), 5000)
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Gemini timeout")), 5000)),
     ])) as { response: { text: () => string } };
 
     const content = result.response.text();

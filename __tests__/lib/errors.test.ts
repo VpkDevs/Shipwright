@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
 import {
-  GithubApiError,
+  DatabaseError,
   GeminiError,
+  GithubApiError,
   RateLimitError,
   ValidationError,
-  DatabaseError,
 } from "@/lib/errors";
+import { describe, expect, it } from "vitest";
 
 describe("Error Classes", () => {
   it("GithubApiError returns 502 with safe user message", () => {

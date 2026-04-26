@@ -45,6 +45,6 @@
     "vitest": "^4.1.5"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["biome check --apply --no-errors-on-unmatched-files"]
+    "*.{ts,tsx}": ["biome check --apply"]
   }
 }

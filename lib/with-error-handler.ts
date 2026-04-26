@@ -1,9 +1,7 @@
 import { AppError, RateLimitError } from "./errors";
 import { log } from "./logger";
 
-export function withErrorHandler(
-  handler: (req: Request) => Promise<Response>
-) {
+export function withErrorHandler(handler: (req: Request) => Promise<Response>) {
   return async (req: Request) => {
     try {
       return await handler(req);
@@ -34,10 +32,10 @@ export function withErrorHandler(
       }
 
       log.error({ error }, "Unknown error");
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   };
 }

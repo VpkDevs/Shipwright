@@ -40,10 +40,7 @@ export interface RateLimitResult {
   retryAfter?: number;
 }
 
-export async function checkRateLimit(
-  userId: string,
-  route: string
-): Promise<RateLimitResult> {
+export async function checkRateLimit(userId: string, route: string): Promise<RateLimitResult> {
   const ratelimit = getRateLimit(route);
   const key = `${userId}:${route}`;
 
