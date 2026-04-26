@@ -1,10 +1,11 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { log } from "./logger";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const hasRedisConfig = Boolean(redisUrl && redisToken);
+const redis = hasRedisConfig ? new Redis({ url: redisUrl, token: redisToken }) : null;
 
 const limits = {
   "/api/repos": { requests: 30, window: "1 m" },
@@ -15,12 +16,23 @@ const limits = {
 
 const ratelimits: Record<string, Ratelimit> = {};
 
-function getRateLimit(route: string) {
-  if (!ratelimits[route]) {
-    const config = limits[route as keyof typeof limits] || {
+function getConfig(route: string) {
+  return (
+    limits[route as keyof typeof limits] || {
       requests: 10,
       window: "1 m",
-    };
+    }
+  );
+}
+
+function getRateLimit(route: string) {
+  if (!redis) {
+    return null;
+  }
+
+  if (!ratelimits[route]) {
+    const config = getConfig(route);
+
     ratelimits[route] = new Ratelimit({
       redis,
       limiter: Ratelimit.slidingWindow(
@@ -30,6 +42,17 @@ function getRateLimit(route: string) {
     });
   }
   return ratelimits[route];
+}
+
+function createFallbackResult(route: string): RateLimitResult {
+  const config = getConfig(route);
+
+  return {
+    success: true,
+    limit: config.requests,
+    remaining: config.requests,
+    reset: 0,
+  };
 }
 
 export interface RateLimitResult {
@@ -42,18 +65,28 @@ export interface RateLimitResult {
 
 export async function checkRateLimit(userId: string, route: string): Promise<RateLimitResult> {
   const ratelimit = getRateLimit(route);
+
+  if (!ratelimit) {
+    return createFallbackResult(route);
+  }
+
   const key = `${userId}:${route}`;
 
-  const result = await ratelimit.limit(key);
+  try {
+    const result = await ratelimit.limit(key);
 
-  const resetMs = (result as any).resetAfterMs || (result as any).reset || 0;
-  const resetSeconds = resetMs ? Math.ceil(resetMs / 1000) : 0;
+    const resetMs = (result as any).resetAfterMs || (result as any).reset || 0;
+    const resetSeconds = resetMs ? Math.ceil(resetMs / 1000) : 0;
 
-  return {
-    success: result.success,
-    limit: result.limit,
-    remaining: result.remaining,
-    reset: resetSeconds,
-    retryAfter: resetSeconds > 0 ? resetSeconds : undefined,
-  };
+    return {
+      success: result.success,
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: resetSeconds,
+      retryAfter: resetSeconds > 0 ? resetSeconds : undefined,
+    };
+  } catch (error) {
+    log.warn({ error, route }, "Rate limiting unavailable, allowing request");
+    return createFallbackResult(route);
+  }
 }
