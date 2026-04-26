@@ -22,7 +22,7 @@
     "@upstash/redis": "^1.35.0",
     "@vercel/postgres": "^0.8.0",
     "drizzle-orm": "^0.45.2",
-    "jose": "^5.4.0",
+    "jose": "^6.2.2",
     "next": "^15.5.14",
     "next-auth": "^4.24.0",
     "pino": "^10.3.1",
