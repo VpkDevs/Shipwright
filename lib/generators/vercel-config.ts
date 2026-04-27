@@ -9,59 +9,6 @@ interface VercelConfig {
   env?: Record<string, string>;
 }
 
-export function generateVercelConfig(analysis: RepoAnalysis): string {
-  const config: VercelConfig = {
-    buildCommand: analysis.buildScript || "npm run build",
-    outputDirectory: getOutputDirectory(analysis.framework),
-    framework: getFrameworkConfig(analysis.framework) || undefined,
-  };
-
-  if (analysis.envVarsDetected.length > 0) {
-    config.env = analysis.envVarsDetected.reduce(
-      (acc, envVar) => {
-        acc[envVar] = `@${envVar}`;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
-  }
-
-  return JSON.stringify(config, null, 2);
-}
-
-function getOutputDirectory(framework: string): string {
-  switch (framework) {
-    case "Next.js":
-      return ".next";
-    case "React":
-    case "Vite":
-      return "dist";
-    case "Gatsby":
-      return "public";
-    case "Nuxt":
-      return "dist";
-    default:
-      return "dist";
-  }
-}
-
-function getFrameworkConfig(framework: string): string {
-  switch (framework) {
-    case "Next.js":
-      return "nextjs";
-    case "React":
-      return "react";
-    case "Vue":
-      return "vue";
-    case "Svelte":
-      return "svelte";
-    case "Astro":
-      return "astro";
-    default:
-      return "";
-  }
-}
-
 export function generateVercelJsonFile(analysis: RepoAnalysis): string {
   if (analysis.framework !== "Next.js") {
     return "";
