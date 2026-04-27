@@ -17,3 +17,19 @@ export interface GeneratedContent {
   readme: string;
   landingPage: string;
 }
+
+// ─── Payment / Billing Types ───────────────────────────────────────────────
+
+/** Access tier returned by the billing status endpoint */
+export type PlanType = "none" | "credit" | "pro";
+
+export interface PaymentStatus {
+  /** Current plan: none, credit (one-time), or pro/team (subscription) */
+  plan: PlanType;
+  /** Remaining one-time ship credits (only if plan === "credit") */
+  credits: number;
+  /** ISO date string for subscription expiry (only if plan === "pro") */
+  proExpiresAt?: string;
+  /** Stripe customer ID for this user */
+  stripeCustomerId?: string;
+}
