@@ -17,7 +17,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
     "@google/generative-ai": "^0.14.0",
-    "@octokit/rest": "^21.0.0",
+    "@octokit/rest": "^22.0.1",
     "@upstash/ratelimit": "^2.0.0",
     "@upstash/redis": "^1.35.0",
     "@vercel/postgres": "^0.8.0",
