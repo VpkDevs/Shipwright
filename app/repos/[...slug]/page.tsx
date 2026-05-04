@@ -27,8 +27,8 @@ export default function RepoPage() {
   const [prError, setPRError] = useState("");
 
   const slug = params?.slug;
-  const owner = Array.isArray(slug) ? slug[0] : slug;
-  const repo = Array.isArray(slug) ? slug[1] : undefined;
+  const owner = Array.isArray(slug) && slug.length === 2 ? slug[0] : undefined;
+  const repo = Array.isArray(slug) && slug.length === 2 ? slug[1] : undefined;
 
   useEffect(() => {
     if (!owner || !repo) {
@@ -283,9 +283,9 @@ export default function RepoPage() {
                   <div>
                     <p className="text-slate-500 text-xs mb-1">Deployment Issues</p>
                     <ul className="text-xs text-slate-300 space-y-2">
-                      {analysis.deploymentIssues.slice(0, 4).map((issue) => (
+                      {analysis.deploymentIssues.slice(0, 4).map((issue, idx) => (
                         <li
-                          key={`${issue.severity}-${issue.title}`}
+                          key={`${issue.severity}-${issue.title}-${issue.file ?? idx}`}
                           className="rounded border border-slate-700 bg-slate-900/60 p-2"
                         >
                           <span

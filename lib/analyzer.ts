@@ -19,6 +19,7 @@ const IGNORED_PATH_PARTS = [
   ".turbo/",
   ".vercel/",
 ];
+const SOURCE_FILE_SCAN_CONCURRENCY = 5;
 
 export class RepoAnalyzer {
   private client: GitHubClient;
@@ -49,7 +50,6 @@ export class RepoAnalyzer {
     const deploymentIssues = this.buildDeploymentIssues({
       packageJson,
       framework,
-      packageManager,
       hasDocker,
       hasEnvExample,
       hasReadme,
@@ -78,6 +78,7 @@ export class RepoAnalyzer {
       lockfile,
       envVarsDetected: envVars,
       buildScript,
+      startScript,
       missingConfigs,
       deploymentIssues,
       recommendedActions,
@@ -142,22 +143,33 @@ export class RepoAnalyzer {
   ): Promise<string[]> {
     const sourceFiles = fileList
       .filter((path) => SOURCE_FILE_PATTERN.test(path))
-      .filter((path) => !IGNORED_PATH_PARTS.some((part) => path.includes(part)))
-      .slice(0, 40);
+      .filter((path) => !IGNORED_PATH_PARTS.some((part) => path.includes(part)));
     const vars = new Set<string>();
 
-    await Promise.all(
-      sourceFiles.map(async (file) => {
+    await this.eachWithConcurrency(sourceFiles, SOURCE_FILE_SCAN_CONCURRENCY, async (file) => {
+      try {
         const content = await this.client.getFileContent(owner, repo, file);
         if (!content) return;
 
         for (const envVar of this.extractEnvVarsFromSource(content)) {
           vars.add(envVar);
         }
-      })
-    );
+      } catch {
+        // Source scanning is best-effort; one unreadable file should not fail analysis.
+      }
+    });
 
     return Array.from(vars);
+  }
+
+  private async eachWithConcurrency<T>(
+    items: T[],
+    concurrency: number,
+    worker: (item: T) => Promise<void>
+  ): Promise<void> {
+    for (let index = 0; index < items.length; index += concurrency) {
+      await Promise.all(items.slice(index, index + concurrency).map((item) => worker(item)));
+    }
   }
 
   extractEnvVarsFromSource(content: string): string[] {
@@ -290,7 +302,6 @@ export class RepoAnalyzer {
   private buildDeploymentIssues(params: {
     packageJson: PackageJson | null;
     framework: string;
-    packageManager: string;
     hasDocker: boolean;
     hasEnvExample: boolean;
     hasReadme: boolean;

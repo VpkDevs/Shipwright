@@ -13,8 +13,15 @@ export function generateDeploymentPlan(
   const actions = analysis.recommendedActions.length
     ? analysis.recommendedActions.map((action) => `- [ ] ${action}`).join("\n")
     : "- [ ] Run the build command in CI before merging deployment changes.";
-  const buildCommand = getRunCommand(analysis.packageManager, "build");
-  const startCommand = getRunCommand(analysis.packageManager, "start");
+  const verificationCommands = [
+    `${analysis.packageManager} install`,
+    analysis.buildScript
+      ? getRunCommand(analysis.packageManager, "build")
+      : "# Add a build script before testing local verification",
+    analysis.startScript
+      ? getRunCommand(analysis.packageManager, "start")
+      : "# Add a start script before testing production startup",
+  ];
 
   return [
     `# Shipwright Deployment Plan for ${owner}/${repo}`,
@@ -51,9 +58,7 @@ export function generateDeploymentPlan(
     "## Suggested Local Verification",
     "",
     "```bash",
-    `${analysis.packageManager} install`,
-    buildCommand,
-    analysis.buildScript ? startCommand : "# Add a build script before testing production startup",
+    ...verificationCommands,
     "```",
     "",
     "## Hosting Notes",

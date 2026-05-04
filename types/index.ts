@@ -18,6 +18,7 @@ export interface RepoAnalysis {
   lockfile: string | null;
   envVarsDetected: string[];
   buildScript: string | null;
+  startScript: string | null;
   missingConfigs: string[];
   deploymentIssues: DeploymentIssue[];
   recommendedActions: string[];

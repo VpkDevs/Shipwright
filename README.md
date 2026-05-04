@@ -232,6 +232,7 @@ Analyze a repository.
   "lockfile": "package-lock.json",
   "envVarsDetected": ["DATABASE_URL", "API_KEY"],
   "buildScript": "npm run build",
+  "startScript": "npm start",
   "missingConfigs": [],
   "deploymentIssues": [
     {

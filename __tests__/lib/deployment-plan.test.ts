@@ -12,6 +12,7 @@ const baseAnalysis: RepoAnalysis = {
   lockfile: "package-lock.json",
   envVarsDetected: ["DATABASE_URL", "NEXTAUTH_SECRET"],
   buildScript: "next build",
+  startScript: "next start",
   missingConfigs: [],
   deploymentIssues: [
     {
@@ -37,6 +38,7 @@ describe("generateDeploymentPlan", () => {
     expect(plan).toContain("Environment variables need documentation");
     expect(plan).toContain("`DATABASE_URL`");
     expect(plan).toContain("npm run build");
+    expect(plan).toContain("npm run start");
   });
 
   it("handles repos with no detected issues", () => {
@@ -44,6 +46,7 @@ describe("generateDeploymentPlan", () => {
       ...baseAnalysis,
       hasEnvExample: true,
       envVarsDetected: [],
+      startScript: null,
       deploymentIssues: [],
       recommendedActions: [],
       readinessSummary: "Next.js app using npm; no deployment blockers detected.",
@@ -52,5 +55,6 @@ describe("generateDeploymentPlan", () => {
 
     expect(plan).toContain("No deployment issues detected");
     expect(plan).toContain("No environment variable references detected");
+    expect(plan).toContain("Add a start script before testing production startup");
   });
 });
