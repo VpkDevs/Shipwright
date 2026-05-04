@@ -76,12 +76,18 @@ export const POST = withErrorHandler(async (request: Request) => {
   const generated = await generateContentWithGemini(repo, owner, framework, deps, readinessSummary);
   const packageJsonScripts = generatePackageJsonScripts(analysis);
   const github = new GitHubClient(session.user.accessToken);
-  const packageJsonContent = await github.getFileContent(owner, repo, "package.json");
-  const packageJson = generatePackageJsonFile(packageJsonContent, packageJsonScripts);
-  const defaultBranch = await github.getDefaultBranch(owner, repo).catch(() => "main");
   const hasPackageJson = !analysis.deploymentIssues.some(
     (issue) => issue.title === "No package.json found"
   );
+  const hasGeneratedScripts = Object.keys(packageJsonScripts).length > 0;
+  const packageJsonContent =
+    hasPackageJson && hasGeneratedScripts
+      ? await github.getFileContent(owner, repo, "package.json")
+      : null;
+  const packageJson = generatePackageJsonFile(packageJsonContent, packageJsonScripts);
+  const defaultBranch = hasPackageJson
+    ? await github.getDefaultBranch(owner, repo).catch(() => "main")
+    : "main";
 
   // Fallback if Gemini fails
   const finalGenerated = {
