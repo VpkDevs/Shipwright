@@ -173,15 +173,22 @@ export default function PricingPage() {
           ))}
         </div>
 
-        <div className="mt-14 text-center">
+        <div className="mt-14 text-center space-y-2">
           <p className="text-slate-500 text-sm">
             All plans include a 30-day money-back guarantee. Questions?{" "}
-            <a
-              href="mailto:vincekinney1991@gmail.com"
-              className="text-blue-400 hover:underline"
-            >
+            <a href="mailto:vincekinney1991@gmail.com" className="text-blue-400 hover:underline">
               Email us
             </a>
+          </p>
+          <p className="text-slate-600 text-xs">
+            By purchasing, you agree to our{" "}
+            <Link href="/terms" className="text-slate-500 hover:text-slate-300">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="text-slate-500 hover:text-slate-300">
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>
