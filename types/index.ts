@@ -1,11 +1,27 @@
+export type DeploymentIssueSeverity = "blocker" | "warning" | "info";
+
+export interface DeploymentIssue {
+  severity: DeploymentIssueSeverity;
+  title: string;
+  detail: string;
+  fix: string;
+  file?: string;
+}
+
 export interface RepoAnalysis {
   framework: string;
   packageManager: string;
   backendType: string;
   hasDocker: boolean;
+  hasReadme: boolean;
+  hasEnvExample: boolean;
+  lockfile: string | null;
   envVarsDetected: string[];
   buildScript: string | null;
   missingConfigs: string[];
+  deploymentIssues: DeploymentIssue[];
+  recommendedActions: string[];
+  readinessSummary: string;
   deploymentRiskScore: number;
   description: string;
 }
@@ -16,6 +32,7 @@ export interface GeneratedContent {
   envTemplate: string;
   readme: string;
   landingPage: string;
+  deploymentPlan: string;
 }
 
 // ─── Payment / Billing Types ───────────────────────────────────────────────

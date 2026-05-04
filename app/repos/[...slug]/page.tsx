@@ -18,7 +18,7 @@ export default function RepoPage() {
   const [generated, setGenerated] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "readme" | "landing" | "config">(
+  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "readme" | "landing" | "config">(
     "overview"
   );
   const [isGenerating, setIsGenerating] = useState(false);
@@ -106,6 +106,9 @@ export default function RepoPage() {
     }
     if (generated.readme) {
       files.push({ path: "README.md", content: generated.readme });
+    }
+    if (generated.deploymentPlan) {
+      files.push({ path: "SHIPWRIGHT_DEPLOYMENT_PLAN.md", content: generated.deploymentPlan });
     }
     if (generated.landingPage) {
       files.push({ path: "landing/index.html", content: generated.landingPage });
@@ -207,6 +210,11 @@ export default function RepoPage() {
               <h2 className="text-lg font-semibold mb-4">Analysis</h2>
 
               <div className="space-y-3 text-sm">
+                <div className="rounded border border-slate-700 bg-slate-900/60 p-3">
+                  <p className="text-slate-500 text-xs mb-1">Readiness</p>
+                  <p className="text-slate-200 leading-relaxed">{analysis.readinessSummary}</p>
+                </div>
+
                 <div>
                   <p className="text-slate-500 text-xs">Framework</p>
                   <p className="font-semibold text-blue-400">{analysis.framework}</p>
@@ -218,6 +226,11 @@ export default function RepoPage() {
                 </div>
 
                 <div>
+                  <p className="text-slate-500 text-xs">Lockfile</p>
+                  <p className="font-semibold">{analysis.lockfile || "Not detected"}</p>
+                </div>
+
+                <div>
                   <p className="text-slate-500 text-xs">Backend Type</p>
                   <p className="font-semibold">{analysis.backendType}</p>
                 </div>
@@ -225,6 +238,12 @@ export default function RepoPage() {
                 {analysis.hasDocker && (
                   <div className="flex items-center gap-2 text-green-400">
                     <span>✓</span> Docker present
+                  </div>
+                )}
+
+                {analysis.hasEnvExample && (
+                  <div className="flex items-center gap-2 text-green-400">
+                    <span>✓</span> Environment example present
                   </div>
                 )}
 
@@ -260,6 +279,33 @@ export default function RepoPage() {
                   </div>
                 )}
 
+                {analysis.deploymentIssues.length > 0 && (
+                  <div>
+                    <p className="text-slate-500 text-xs mb-1">Deployment Issues</p>
+                    <ul className="text-xs text-slate-300 space-y-2">
+                      {analysis.deploymentIssues.slice(0, 4).map((issue) => (
+                        <li
+                          key={`${issue.severity}-${issue.title}`}
+                          className="rounded border border-slate-700 bg-slate-900/60 p-2"
+                        >
+                          <span
+                            className={`mr-2 font-semibold ${
+                              issue.severity === "blocker"
+                                ? "text-red-400"
+                                : issue.severity === "warning"
+                                  ? "text-yellow-400"
+                                  : "text-blue-300"
+                            }`}
+                          >
+                            {issue.severity}
+                          </span>
+                          {issue.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {analysis.envVarsDetected.length > 0 && (
                   <div>
                     <p className="text-slate-500 text-xs mb-1">Environment Variables</p>
@@ -289,14 +335,14 @@ export default function RepoPage() {
               <div className="card text-center py-12">
                 <div className="text-4xl mb-4">📋</div>
                 <p className="text-slate-400 mb-4">
-                  Click &quot;Generate Content&quot; to create deployment configs, README, and
-                  landing page.
+                  Click &quot;Generate Content&quot; to create deployment configs, a deployment
+                  plan, README, and landing page.
                 </p>
               </div>
             ) : (
               <>
                 <div className="flex gap-2 mb-6 border-b border-slate-700">
-                  {(["overview", "readme", "landing", "config"] as const).map((tab) => (
+                  {(["overview", "plan", "readme", "landing", "config"] as const).map((tab) => (
                     <button
                       type="button"
                       key={tab}
@@ -334,6 +380,20 @@ export default function RepoPage() {
                     <div className="prose prose-invert max-w-none text-sm">
                       <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96 whitespace-pre-wrap">
                         {generated.readme}
+                      </pre>
+                    </div>
+                  )}
+
+                  {activeTab === "plan" && (
+                    <div className="space-y-4">
+                      <p className="text-slate-400 text-sm">
+                        Deployment plan — will be saved as{" "}
+                        <code className="bg-slate-700 px-1 rounded">
+                          SHIPWRIGHT_DEPLOYMENT_PLAN.md
+                        </code>
+                      </p>
+                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96 whitespace-pre-wrap">
+                        {generated.deploymentPlan}
                       </pre>
                     </div>
                   )}

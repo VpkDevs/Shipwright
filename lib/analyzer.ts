@@ -1,4 +1,4 @@
-import type { RepoAnalysis } from "@/types";
+import type { DeploymentIssue, RepoAnalysis } from "@/types";
 import { GitHubClient } from "./github";
 
 interface PackageJson {
@@ -6,7 +6,19 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
   scripts?: Record<string, string>;
   packageManager?: string;
+  engines?: Record<string, string>;
 }
+
+const SOURCE_FILE_PATTERN = /\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte|astro)$/;
+const IGNORED_PATH_PARTS = [
+  "node_modules/",
+  ".next/",
+  "dist/",
+  "build/",
+  "coverage/",
+  ".turbo/",
+  ".vercel/",
+];
 
 export class RepoAnalyzer {
   private client: GitHubClient;
@@ -16,7 +28,7 @@ export class RepoAnalyzer {
   }
 
   async analyze(owner: string, repo: string): Promise<RepoAnalysis> {
-    const [packageJson, hasDocker, envVars, fileList] = await Promise.all([
+    const [packageJson, hasDocker, envVarsFromFiles, fileList] = await Promise.all([
       this.getPackageJson(owner, repo),
       this.hasDockerfile(owner, repo),
       this.detectEnvVars(owner, repo),
@@ -24,26 +36,52 @@ export class RepoAnalyzer {
     ]);
 
     const framework = this.detectFramework(packageJson);
-    const packageManager = await this.detectPackageManager(owner, repo, packageJson);
+    const envVarsFromSource = await this.detectEnvVarsFromSource(owner, repo, fileList);
+    const envVars = Array.from(new Set([...envVarsFromFiles, ...envVarsFromSource])).sort();
+    const lockfile = this.detectLockfile(fileList, packageJson);
+    const packageManager = this.detectPackageManager(packageJson, lockfile);
     const backendType = this.detectBackendType(packageJson);
     const buildScript = packageJson?.scripts?.build || null;
+    const startScript = packageJson?.scripts?.start || null;
+    const hasReadme = this.hasReadmeFile(fileList);
+    const hasEnvExample = this.hasEnvExampleFile(fileList);
     const missingConfigs = this.checkMissingConfigs(packageJson, framework, hasDocker, fileList);
-
-    const riskScore = this.calculateRiskScore({
-      buildScript,
+    const deploymentIssues = this.buildDeploymentIssues({
+      packageJson,
+      framework,
+      packageManager,
       hasDocker,
-      envVarsCount: envVars.length,
-      missingConfigsCount: missingConfigs.length,
+      hasEnvExample,
+      hasReadme,
+      lockfile,
+      envVars,
+      buildScript,
+      startScript,
+      missingConfigs,
     });
+    const recommendedActions = this.buildRecommendedActions(deploymentIssues, framework);
+    const readinessSummary = this.buildReadinessSummary(
+      deploymentIssues,
+      framework,
+      packageManager
+    );
+
+    const riskScore = this.calculateRiskScore(deploymentIssues);
 
     return {
       framework,
       packageManager,
       backendType,
       hasDocker,
+      hasReadme,
+      hasEnvExample,
+      lockfile,
       envVarsDetected: envVars,
       buildScript,
       missingConfigs,
+      deploymentIssues,
+      recommendedActions,
+      readinessSummary,
       deploymentRiskScore: riskScore,
       description: `${framework} project with ${packageManager} and ${backendType}`,
     };
@@ -61,7 +99,7 @@ export class RepoAnalyzer {
 
   private async getFileList(owner: string, repo: string): Promise<string[]> {
     try {
-      const tree = await this.client.getFileTree(owner, repo, 1);
+      const tree = await this.client.getFileTree(owner, repo, 3);
       return tree.map((f) => f.path);
     } catch {
       return [];
@@ -97,6 +135,49 @@ export class RepoAnalyzer {
     return Array.from(vars);
   }
 
+  private async detectEnvVarsFromSource(
+    owner: string,
+    repo: string,
+    fileList: string[]
+  ): Promise<string[]> {
+    const sourceFiles = fileList
+      .filter((path) => SOURCE_FILE_PATTERN.test(path))
+      .filter((path) => !IGNORED_PATH_PARTS.some((part) => path.includes(part)))
+      .slice(0, 40);
+    const vars = new Set<string>();
+
+    await Promise.all(
+      sourceFiles.map(async (file) => {
+        const content = await this.client.getFileContent(owner, repo, file);
+        if (!content) return;
+
+        for (const envVar of this.extractEnvVarsFromSource(content)) {
+          vars.add(envVar);
+        }
+      })
+    );
+
+    return Array.from(vars);
+  }
+
+  extractEnvVarsFromSource(content: string): string[] {
+    const vars = new Set<string>();
+    const patterns = [
+      /process\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,
+      /process\.env\[['"]([A-Za-z_][A-Za-z0-9_]*)['"]\]/g,
+      /import\.meta\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,
+      /Deno\.env\.get\(['"]([A-Za-z_][A-Za-z0-9_]*)['"]\)/g,
+    ];
+
+    for (const pattern of patterns) {
+      for (const match of content.matchAll(pattern)) {
+        vars.add(match[1]);
+      }
+    }
+
+    return Array.from(vars);
+  }
+
   private detectFramework(packageJson: PackageJson | null): string {
     if (!packageJson?.dependencies && !packageJson?.devDependencies) {
       return "Unknown";
@@ -116,11 +197,7 @@ export class RepoAnalyzer {
     return "Node.js";
   }
 
-  private async detectPackageManager(
-    owner: string,
-    repo: string,
-    packageJson: PackageJson | null
-  ): Promise<string> {
+  private detectPackageManager(packageJson: PackageJson | null, lockfile: string | null): string {
     // Check packageManager field in package.json (corepack standard)
     if (packageJson?.packageManager) {
       const pm = packageJson.packageManager.toLowerCase();
@@ -130,27 +207,32 @@ export class RepoAnalyzer {
       if (pm.startsWith("npm")) return "npm";
     }
 
-    // Check for lock files to determine package manager
-    const lockFileChecks = await Promise.all([
-      this.client
-        .getFileContent(owner, repo, "bun.lockb")
-        .then((r) => ({ pm: "bun", exists: r !== null })),
-      this.client
-        .getFileContent(owner, repo, "pnpm-lock.yaml")
-        .then((r) => ({ pm: "pnpm", exists: r !== null })),
-      this.client
-        .getFileContent(owner, repo, "yarn.lock")
-        .then((r) => ({ pm: "yarn", exists: r !== null })),
-      this.client
-        .getFileContent(owner, repo, "package-lock.json")
-        .then((r) => ({ pm: "npm", exists: r !== null })),
-    ]);
-
-    for (const check of lockFileChecks) {
-      if (check.exists) return check.pm;
-    }
+    if (lockfile === "bun.lock" || lockfile === "bun.lockb") return "bun";
+    if (lockfile === "pnpm-lock.yaml") return "pnpm";
+    if (lockfile === "yarn.lock") return "yarn";
+    if (lockfile === "package-lock.json") return "npm";
 
     return "npm";
+  }
+
+  private detectLockfile(fileList: string[], packageJson: PackageJson | null): string | null {
+    const rootFiles = new Set(fileList.filter((path) => !path.includes("/")));
+
+    if (packageJson?.packageManager?.toLowerCase().startsWith("bun") && rootFiles.has("bun.lock")) {
+      return "bun.lock";
+    }
+
+    for (const lockfile of [
+      "bun.lock",
+      "bun.lockb",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "package-lock.json",
+    ]) {
+      if (rootFiles.has(lockfile)) return lockfile;
+    }
+
+    return null;
   }
 
   private detectBackendType(packageJson: PackageJson | null): string {
@@ -197,25 +279,175 @@ export class RepoAnalyzer {
     return missing;
   }
 
-  private calculateRiskScore(params: {
-    buildScript: string | null;
-    hasDocker: boolean;
-    envVarsCount: number;
-    missingConfigsCount: number;
-  }): number {
-    const MISSING_BUILD_SCRIPT_PENALTY = 20;
-    const NO_DOCKER_PENALTY = 10;
-    const MISSING_CONFIG_PENALTY = 5;
-    const MANY_ENV_VARS_PENALTY = 15;
-    const MANY_ENV_VARS_THRESHOLD = 5;
+  private hasReadmeFile(fileList: string[]): boolean {
+    return fileList.some((file) => /^readme(\.md|\.mdx|\.txt)?$/i.test(file));
+  }
 
+  private hasEnvExampleFile(fileList: string[]): boolean {
+    return fileList.some((file) => /^\.env(\.example|\.sample|\.template)$/i.test(file));
+  }
+
+  private buildDeploymentIssues(params: {
+    packageJson: PackageJson | null;
+    framework: string;
+    packageManager: string;
+    hasDocker: boolean;
+    hasEnvExample: boolean;
+    hasReadme: boolean;
+    lockfile: string | null;
+    envVars: string[];
+    buildScript: string | null;
+    startScript: string | null;
+    missingConfigs: string[];
+  }): DeploymentIssue[] {
+    const issues: DeploymentIssue[] = [];
+
+    if (!params.packageJson) {
+      issues.push({
+        severity: "blocker",
+        title: "No package.json found",
+        detail: "Shipwright could not identify this as a Node-based app with installable scripts.",
+        fix: "Add a package.json or deploy this repo with a platform-specific adapter.",
+        file: "package.json",
+      });
+      return issues;
+    }
+
+    if (!params.buildScript) {
+      issues.push({
+        severity: "blocker",
+        title: "Missing build script",
+        detail: "Most deployment platforms need a repeatable build command.",
+        fix: "Add a build script to package.json, for example `next build` or `vite build`.",
+        file: "package.json",
+      });
+    }
+
+    if (!params.startScript && params.framework !== "React" && params.framework !== "Vue") {
+      issues.push({
+        severity: "warning",
+        title: "Missing start script",
+        detail: "Server-rendered or API-backed apps usually need a production start command.",
+        fix: "Add a start script to package.json that runs the production server.",
+        file: "package.json",
+      });
+    }
+
+    if (!params.lockfile) {
+      issues.push({
+        severity: "warning",
+        title: "No lockfile detected",
+        detail: "Installs may resolve different dependency versions between local machines and CI.",
+        fix: "Commit the lockfile generated by your package manager.",
+      });
+    }
+
+    if (params.envVars.length > 0 && !params.hasEnvExample) {
+      issues.push({
+        severity: "warning",
+        title: "Environment variables need documentation",
+        detail: `${params.envVars.length} environment variable reference${
+          params.envVars.length === 1 ? "" : "s"
+        } detected, but no .env.example file was found.`,
+        fix: "Add .env.example with placeholder values for every required variable.",
+        file: ".env.example",
+      });
+    }
+
+    if (!params.hasReadme) {
+      issues.push({
+        severity: "info",
+        title: "README is missing",
+        detail:
+          "New users and contributors will not know how to configure, run, or deploy the app.",
+        fix: "Add a README with setup, environment variables, build, and deployment notes.",
+        file: "README.md",
+      });
+    }
+
+    if (params.framework === "Next.js" && params.missingConfigs.includes("next.config.js")) {
+      issues.push({
+        severity: "info",
+        title: "No Next.js config detected",
+        detail:
+          "This is fine for simple apps, but image domains, redirects, and output settings often live here.",
+        fix: "Add next.config.js only when the app needs framework-level deployment options.",
+        file: "next.config.js",
+      });
+    }
+
+    if (!params.packageJson.engines?.node) {
+      issues.push({
+        severity: "info",
+        title: "Node version is not pinned",
+        detail:
+          "Deployment platforms may pick a newer Node runtime than the app was tested against.",
+        fix: "Add an engines.node field to package.json once you know the supported runtime.",
+        file: "package.json",
+      });
+    }
+
+    if (!params.hasDocker && params.framework === "Unknown") {
+      issues.push({
+        severity: "warning",
+        title: "Deployment target is unclear",
+        detail: "Shipwright could not infer a known web framework or a Docker deployment path.",
+        fix: "Add framework dependencies, deployment config, or a Dockerfile.",
+      });
+    }
+
+    return issues;
+  }
+
+  private buildRecommendedActions(issues: DeploymentIssue[], framework: string): string[] {
+    const actions = issues.map((issue) => issue.fix);
+
+    if (framework === "Next.js") {
+      actions.push(
+        "Deploy first to a preview environment and verify routes, auth callbacks, and images."
+      );
+    } else if (framework === "React" || framework === "Vue") {
+      actions.push(
+        "Confirm the static output directory matches the hosting platform configuration."
+      );
+    } else {
+      actions.push("Run the generated deployment plan against your target hosting platform.");
+    }
+
+    return Array.from(new Set(actions));
+  }
+
+  private buildReadinessSummary(
+    issues: DeploymentIssue[],
+    framework: string,
+    packageManager: string
+  ): string {
+    const blockers = issues.filter((issue) => issue.severity === "blocker").length;
+    const warnings = issues.filter((issue) => issue.severity === "warning").length;
+
+    if (blockers > 0) {
+      return `${framework} app using ${packageManager}; ${blockers} blocker${
+        blockers === 1 ? "" : "s"
+      } must be fixed before deployment.`;
+    }
+
+    if (warnings > 0) {
+      return `${framework} app using ${packageManager}; likely deployable after ${warnings} warning${
+        warnings === 1 ? "" : "s"
+      } are reviewed.`;
+    }
+
+    return `${framework} app using ${packageManager}; no deployment blockers detected.`;
+  }
+
+  private calculateRiskScore(issues: DeploymentIssue[]): number {
     let score = 0;
 
-    if (!params.buildScript) score += MISSING_BUILD_SCRIPT_PENALTY;
-    if (!params.hasDocker) score += NO_DOCKER_PENALTY;
-    if (params.missingConfigsCount > 0)
-      score += params.missingConfigsCount * MISSING_CONFIG_PENALTY;
-    if (params.envVarsCount > MANY_ENV_VARS_THRESHOLD) score += MANY_ENV_VARS_PENALTY;
+    for (const issue of issues) {
+      if (issue.severity === "blocker") score += 30;
+      if (issue.severity === "warning") score += 12;
+      if (issue.severity === "info") score += 4;
+    }
 
     return Math.min(score, 100);
   }

@@ -68,7 +68,7 @@ export const POST = withErrorHandler(async (request: Request) => {
     }
 
     // Create the pull request
-    const prTitle = "🚢 Shipwright: Add deployment configuration";
+    const prTitle = "Shipwright: Add deployment readiness plan";
     const prBody = [
       "## Shipwright Deployment Configuration",
       "",
@@ -76,6 +76,11 @@ export const POST = withErrorHandler(async (request: Request) => {
       "",
       "### Files Added",
       ...files.map((f) => `- \`${f.path}\``),
+      "",
+      "### What to Review",
+      "- Start with `SHIPWRIGHT_DEPLOYMENT_PLAN.md` if present",
+      "- Confirm install, build, and start commands match this repository",
+      "- Add real environment values in your hosting platform, not in this PR",
       "",
       "### Next Steps",
       "1. Review the generated files",
