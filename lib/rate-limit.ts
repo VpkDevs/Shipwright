@@ -72,6 +72,13 @@ function checkLocalRateLimit(userId: string, route: string): RateLimitResult {
   const key = `${userId}:${route}`;
   const now = Date.now();
   const windowMs = getWindowMs(config.window);
+
+  for (const [storedKey, value] of localRateLimits) {
+    if (value.resetAt <= now) {
+      localRateLimits.delete(storedKey);
+    }
+  }
+
   const existing = localRateLimits.get(key);
   const bucket =
     existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };

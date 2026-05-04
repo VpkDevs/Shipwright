@@ -84,6 +84,32 @@ describe("vercel config generators", () => {
     expect(patched).toContain('"dev": "custom dev"');
   });
 
+  it("preserves existing scripts when generated scripts use the same keys", () => {
+    const patched = generatePackageJsonFile(
+      JSON.stringify({
+        name: "demo",
+        scripts: {
+          build: "custom build",
+        },
+      }),
+      {
+        build: "next build",
+      }
+    );
+
+    expect(patched).toContain('"build": "custom build"');
+    expect(patched).not.toContain('"build": "next build"');
+  });
+
+  it("does not assume Vite scripts for generic React projects", () => {
+    expect(
+      generatePackageJsonScripts({
+        ...baseAnalysis,
+        framework: "React",
+      })
+    ).toEqual({});
+  });
+
   it("returns null when there is no package.json content", () => {
     expect(generatePackageJsonFile(null, { build: "next build" })).toBeNull();
   });

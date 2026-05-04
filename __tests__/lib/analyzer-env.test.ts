@@ -1,4 +1,4 @@
-import { RepoAnalyzer } from "@/lib/analyzer";
+import { RepoAnalyzer, getUsableTestScript } from "@/lib/analyzer";
 import { describe, expect, it } from "vitest";
 
 describe("RepoAnalyzer env var extraction", () => {
@@ -13,5 +13,15 @@ describe("RepoAnalyzer env var extraction", () => {
     `);
 
     expect(vars).toEqual(["DATABASE_URL", "NEXTAUTH_SECRET", "VITE_PUBLIC_API_URL", "EDGE_TOKEN"]);
+  });
+});
+
+describe("getUsableTestScript", () => {
+  it("ignores npm's default failing test placeholder", () => {
+    expect(getUsableTestScript('echo "Error: no test specified" && exit 1')).toBeNull();
+  });
+
+  it("keeps real test scripts", () => {
+    expect(getUsableTestScript("vitest run")).toBe("vitest run");
   });
 });

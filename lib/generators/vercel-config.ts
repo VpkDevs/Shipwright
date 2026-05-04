@@ -39,16 +39,6 @@ export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<strin
     if (needsDevScript) {
       scripts.dev = "next dev";
     }
-  } else if (analysis.framework === "React" || analysis.framework === "Vue") {
-    if (!analysis.buildScript) {
-      scripts.build = "vite build";
-    }
-    if (!analysis.startScript) {
-      scripts.start = "vite build && vite preview";
-    }
-    if (needsDevScript) {
-      scripts.dev = "vite";
-    }
   }
 
   return scripts;
