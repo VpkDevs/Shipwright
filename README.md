@@ -4,15 +4,17 @@ Turn dormant repos into live products in minutes.
 
 ## Overview
 
-Shipwright is a web application that analyzes your GitHub repositories and generates everything you need to deploy them:
+Shipwright is a deployment doctor for GitHub repositories. It analyzes what your app is, identifies the specific issues that can block a deployment, then opens a pull request with the generated files and a reviewable deployment plan.
 
+- Deployment readiness summaries with blockers, warnings, and recommended fixes
 - Production-ready deployment configurations (Vercel)
+- `SHIPWRIGHT_DEPLOYMENT_PLAN.md` checklists for reviewers
 - Professional README files
 - Beautiful landing pages
 - Environment variable templates
 - Automated pull requests with all generated files
 
-**Goal**: From repository to live URL in under 15 minutes.
+**Goal**: From "I found an old repo" to "I know exactly what blocks deployment" in minutes.
 
 ## Tech Stack
 
@@ -130,6 +132,7 @@ lib/
 ├── github.ts            # GitHub API client
 ├── analyzer.ts          # Repository analysis engine
 └── generators/
+    ├── deployment-plan.ts # Deployment readiness plan generation
     ├── vercel-config.ts # Deployment config generation
     ├── readme.ts        # README generation
     ├── landing.ts       # Landing page generation
@@ -151,10 +154,12 @@ components/
 - [x] Package manager detection
 - [x] Environment variable detection
 - [x] Deployment risk scoring
+- [x] Deployment issue classification
+- [x] Deployment plan generation
 
 ### Week 2
-- [ ] Vercel configuration generation
-- [ ] Pull request automation
+- [x] Vercel configuration generation
+- [x] Pull request automation
 - [ ] Deployment script generation
 
 ### Week 3
@@ -174,10 +179,12 @@ components/
 3. **Analysis**: Shipwright analyzes the repository:
    - Detects framework (Next.js, React, Vue, etc.)
    - Identifies package manager
-   - Scans for environment variables
+   - Detects lockfiles and dependency install risk
+   - Scans `.env` files and source code for environment variables
    - Checks for missing configurations
+   - Classifies deployment blockers, warnings, and informational issues
    - Calculates deployment risk score
-4. **Generate**: Generate deployment configs, README, and landing page
+4. **Generate**: Generate deployment configs, deployment plan, README, and landing page
 5. **Review**: Preview all generated content
 6. **Deploy**: Create a pull request with all changes
 7. **Ship**: Review and merge the PR, then deploy
@@ -220,9 +227,24 @@ Analyze a repository.
   "packageManager": "npm",
   "backendType": "Node.js",
   "hasDocker": false,
+  "hasReadme": true,
+  "hasEnvExample": false,
+  "lockfile": "package-lock.json",
   "envVarsDetected": ["DATABASE_URL", "API_KEY"],
   "buildScript": "npm run build",
+  "startScript": "npm start",
   "missingConfigs": [],
+  "deploymentIssues": [
+    {
+      "severity": "warning",
+      "title": "Environment variables need documentation",
+      "detail": "2 environment variable references detected, but no .env.example file was found.",
+      "fix": "Add .env.example with placeholder values for every required variable.",
+      "file": ".env.example"
+    }
+  ],
+  "recommendedActions": ["Add .env.example with placeholder values for every required variable."],
+  "readinessSummary": "Next.js app using npm; likely deployable after 1 warning is reviewed.",
   "deploymentRiskScore": 15,
   "description": "Next.js project with npm and Node.js"
 }
@@ -247,7 +269,8 @@ Generate deployment configs and content.
   "packageJsonScripts": { ... },
   "envTemplate": "# Environment variables\n...",
   "readme": "# my-project\n...",
-  "landingPage": "<html>...</html>"
+  "landingPage": "<html>...</html>",
+  "deploymentPlan": "# Shipwright Deployment Plan for username/my-project\n..."
 }
 ```
 

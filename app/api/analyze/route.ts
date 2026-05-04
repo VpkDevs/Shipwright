@@ -63,7 +63,7 @@ export const POST = withErrorHandler(async (request: Request) => {
         owner,
         name: repo,
         framework: (analysis as any).framework,
-        risk_score: (analysis as any).riskScore,
+        risk_score: (analysis as any).deploymentRiskScore,
         last_analyzed_at: new Date(),
       });
     } catch (_e) {

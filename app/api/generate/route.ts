@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { repositories } from "@/lib/db/schema";
 import { RateLimitError, ValidationError } from "@/lib/errors";
 import { generateContentWithGemini } from "@/lib/gemini-generator";
+import { generateDeploymentPlan } from "@/lib/generators/deployment-plan";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
 import { generateLandingPage } from "@/lib/generators/landing";
 import { generateReadme } from "@/lib/generators/readme";
@@ -76,6 +77,7 @@ export const POST = withErrorHandler(async (request: Request) => {
     readme: generated?.readme || generateReadme(repo, analysis, description),
     landingPage:
       generated?.landingPageCopy || generateLandingPage(owner, repo, analysis, description),
+    deploymentPlan: generateDeploymentPlan(owner, repo, analysis, description),
   };
 
   return new Response(JSON.stringify(finalGenerated), {
