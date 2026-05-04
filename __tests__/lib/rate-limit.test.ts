@@ -1,3 +1,5 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@upstash/ratelimit", () => {
@@ -28,15 +30,32 @@ describe("Rate Limiting", () => {
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
   });
 
-  it("falls back locally when Upstash is not configured", async () => {
+  it("uses an in-memory fallback when Upstash is not configured", async () => {
     const { checkRateLimit } = await import("@/lib/rate-limit");
 
     const result = await checkRateLimit("user-123", "/api/analyze");
 
     expect(result.success).toBe(true);
     expect(result.limit).toBe(10);
-    expect(result.remaining).toBe(10);
-    expect(result.reset).toBe(0);
+    expect(result.remaining).toBe(9);
+    expect(result.reset).toBeGreaterThan(0);
+    expect(Redis).not.toHaveBeenCalled();
+    expect(Ratelimit).not.toHaveBeenCalled();
+  });
+
+  it("enforces the in-memory fallback limit", async () => {
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+
+    const results = [];
+    for (let i = 0; i < 11; i += 1) {
+      results.push(await checkRateLimit("user-456", "/api/analyze"));
+    }
+
+    expect(results[9].success).toBe(true);
+    expect(results[9].remaining).toBe(0);
+    expect(results[10].success).toBe(false);
+    expect(results[10].remaining).toBe(0);
+    expect(results[10].retryAfter).toBeGreaterThan(0);
   });
 
   it("returns success when limit not exceeded", async () => {
@@ -47,7 +66,11 @@ describe("Rate Limiting", () => {
     const result = await checkRateLimit("user-123", "/api/analyze");
 
     expect(result.success).toBe(true);
+    expect(result.limit).toBe(10);
     expect(result.remaining).toBe(9);
+    expect(result.reset).toBe(60);
+    expect(Redis).toHaveBeenCalled();
+    expect(Ratelimit).toHaveBeenCalled();
   });
 
   it("calculates retryAfter in seconds", async () => {

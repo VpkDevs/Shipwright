@@ -26,9 +26,16 @@ describe("generateCiWorkflow", () => {
   it("uses npm ci when package-lock.json is present", () => {
     const workflow = generateCiWorkflow(baseAnalysis, {});
 
+    expect(workflow).toContain('branches: ["main"]');
     expect(workflow).toContain("run: npm ci");
     expect(workflow).toContain("run: npm run test");
     expect(workflow).toContain("run: npm run build");
+  });
+
+  it("uses the provided default branch in push triggers", () => {
+    const workflow = generateCiWorkflow(baseAnalysis, {}, "master");
+
+    expect(workflow).toContain('branches: ["master"]');
   });
 
   it("includes a build step when Shipwright generated a build script", () => {
@@ -60,6 +67,21 @@ describe("generateCiWorkflow", () => {
     expect(workflow).toContain("run: pnpm test");
   });
 
+  it("does not use frozen lockfile installs for pnpm without a lockfile", () => {
+    const workflow = generateCiWorkflow(
+      {
+        ...baseAnalysis,
+        packageManager: "pnpm",
+        lockfile: null,
+      },
+      {}
+    );
+
+    expect(workflow).toContain("run: corepack enable");
+    expect(workflow).toContain("run: pnpm install");
+    expect(workflow).not.toContain("pnpm install --frozen-lockfile");
+  });
+
   it("sets up Bun for bun projects", () => {
     const workflow = generateCiWorkflow(
       {
@@ -73,5 +95,20 @@ describe("generateCiWorkflow", () => {
     expect(workflow).toContain("uses: oven-sh/setup-bun@v2");
     expect(workflow).toContain("run: bun install --frozen-lockfile");
     expect(workflow).toContain("run: bun run test");
+  });
+
+  it("does not use frozen lockfile installs for bun without a lockfile", () => {
+    const workflow = generateCiWorkflow(
+      {
+        ...baseAnalysis,
+        packageManager: "bun",
+        lockfile: null,
+      },
+      {}
+    );
+
+    expect(workflow).toContain("uses: oven-sh/setup-bun@v2");
+    expect(workflow).toContain("run: bun install");
+    expect(workflow).not.toContain("bun install --frozen-lockfile");
   });
 });

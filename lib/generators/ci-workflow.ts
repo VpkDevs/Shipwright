@@ -2,14 +2,13 @@ import type { RepoAnalysis } from "@/types";
 
 export function generateCiWorkflow(
   analysis: RepoAnalysis,
-  generatedScripts: Record<string, string>
+  generatedScripts: Record<string, string>,
+  defaultBranch = "main"
 ): string {
   const packageManagerSetupSteps = getPackageManagerSetupSteps(analysis.packageManager);
   const installCommand = getInstallCommand(analysis);
-  const buildCommand =
-    analysis.buildScript || generatedScripts.build
-      ? getRunCommand(analysis.packageManager, "build")
-      : null;
+  const hasBuildStep = Boolean(analysis.buildScript || generatedScripts.build);
+  const buildCommand = hasBuildStep ? getRunCommand(analysis.packageManager, "build") : null;
   const testCommand = analysis.testScript ? getRunCommand(analysis.packageManager, "test") : null;
 
   return [
@@ -18,7 +17,7 @@ export function generateCiWorkflow(
     "on:",
     "  pull_request:",
     "  push:",
-    "    branches: [main]",
+    `    branches: [${JSON.stringify(defaultBranch)}]`,
     "",
     "jobs:",
     "  deployment-readiness:",
@@ -61,9 +60,15 @@ function getInstallCommand(analysis: RepoAnalysis): string {
     return analysis.lockfile === "package-lock.json" ? "npm ci" : "npm install";
   }
 
-  if (analysis.packageManager === "pnpm") return "pnpm install --frozen-lockfile";
-  if (analysis.packageManager === "yarn") return "yarn install --frozen-lockfile";
-  if (analysis.packageManager === "bun") return "bun install --frozen-lockfile";
+  if (analysis.packageManager === "pnpm") {
+    return analysis.lockfile ? "pnpm install --frozen-lockfile" : "pnpm install";
+  }
+  if (analysis.packageManager === "yarn") {
+    return analysis.lockfile ? "yarn install --frozen-lockfile" : "yarn install";
+  }
+  if (analysis.packageManager === "bun") {
+    return analysis.lockfile ? "bun install --frozen-lockfile" : "bun install";
+  }
 
   return `${analysis.packageManager} install`;
 }

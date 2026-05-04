@@ -32,7 +32,7 @@ export interface GeneratedContent {
   vercelJson: string;
   packageJsonScripts: Record<string, string>;
   packageJson: string | null;
-  ciWorkflow: string;
+  ciWorkflow: string | null;
   envTemplate: string;
   readme: string;
   landingPage: string;

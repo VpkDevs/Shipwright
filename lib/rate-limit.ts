@@ -9,6 +9,7 @@ const limits = {
 };
 
 const ratelimits: Record<string, Ratelimit> = {};
+const localRateLimits = new Map<string, { count: number; resetAt: number }>();
 let redis: Redis | null = null;
 
 function getLimitConfig(route: string) {
@@ -54,6 +55,43 @@ function getRateLimit(route: string) {
   return ratelimits[route];
 }
 
+function getWindowMs(window: string): number {
+  const [amountText, unit] = window.split(" ");
+  const amount = Number.parseInt(amountText, 10);
+
+  if (unit === "s") return amount * 1000;
+  if (unit === "m") return amount * 60 * 1000;
+  if (unit === "h") return amount * 60 * 60 * 1000;
+  if (unit === "d") return amount * 24 * 60 * 60 * 1000;
+
+  return 60 * 1000;
+}
+
+function checkLocalRateLimit(userId: string, route: string): RateLimitResult {
+  const config = getLimitConfig(route);
+  const key = `${userId}:${route}`;
+  const now = Date.now();
+  const windowMs = getWindowMs(config.window);
+  const existing = localRateLimits.get(key);
+  const bucket =
+    existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };
+
+  bucket.count += 1;
+  localRateLimits.set(key, bucket);
+
+  const reset = Math.ceil((bucket.resetAt - now) / 1000);
+  const remaining = Math.max(config.requests - bucket.count, 0);
+  const success = bucket.count <= config.requests;
+
+  return {
+    success,
+    limit: config.requests,
+    remaining,
+    reset,
+    retryAfter: success ? undefined : reset,
+  };
+}
+
 export interface RateLimitResult {
   success: boolean;
   limit: number;
@@ -64,15 +102,9 @@ export interface RateLimitResult {
 
 export async function checkRateLimit(userId: string, route: string): Promise<RateLimitResult> {
   const ratelimit = getRateLimit(route);
-  const config = getLimitConfig(route);
 
   if (!ratelimit) {
-    return {
-      success: true,
-      limit: config.requests,
-      remaining: config.requests,
-      reset: 0,
-    };
+    return checkLocalRateLimit(userId, route);
   }
 
   const key = `${userId}:${route}`;

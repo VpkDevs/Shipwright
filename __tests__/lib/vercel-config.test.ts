@@ -17,7 +17,7 @@ const baseAnalysis: RepoAnalysis = {
   buildScript: null,
   startScript: null,
   testScript: null,
-  missingConfigs: ["build script", "start script"],
+  missingConfigs: ["build script", "start script", "dev script"],
   deploymentIssues: [],
   recommendedActions: [],
   readinessSummary: "Next.js app using npm; 1 blocker must be fixed before deployment.",
@@ -31,6 +31,18 @@ describe("vercel config generators", () => {
       build: "next build",
       start: "next start",
       dev: "next dev",
+    });
+  });
+
+  it("generates only scripts that are missing", () => {
+    expect(
+      generatePackageJsonScripts({
+        ...baseAnalysis,
+        startScript: "custom start",
+        missingConfigs: ["build script"],
+      })
+    ).toEqual({
+      build: "next build",
     });
   });
 
@@ -49,6 +61,35 @@ describe("vercel config generators", () => {
 
     expect(patched).toContain('"test": "vitest run"');
     expect(patched).toContain('"build": "next build"');
+  });
+
+  it("does not overwrite existing package scripts", () => {
+    const patched = generatePackageJsonFile(
+      JSON.stringify({
+        name: "demo",
+        scripts: {
+          start: "node server.js",
+          dev: "custom dev",
+        },
+      }),
+      {
+        build: "next build",
+        start: "next start",
+        dev: "next dev",
+      }
+    );
+
+    expect(patched).toContain('"build": "next build"');
+    expect(patched).toContain('"start": "node server.js"');
+    expect(patched).toContain('"dev": "custom dev"');
+  });
+
+  it("returns null when there is no package.json content", () => {
+    expect(generatePackageJsonFile(null, { build: "next build" })).toBeNull();
+  });
+
+  it("returns null when no scripts need to be added", () => {
+    expect(generatePackageJsonFile('{"name":"demo"}', {})).toBeNull();
   });
 
   it("returns null when package.json cannot be parsed", () => {

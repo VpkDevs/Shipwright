@@ -3,7 +3,7 @@
 import type { DeploymentIssue, GeneratedContent, RepoAnalysis } from "@/types";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 interface PRResult {
   url: string;
@@ -11,7 +11,9 @@ interface PRResult {
   title: string;
 }
 
-type PreviewTab = "overview" | "plan" | "readme" | "landing" | "config";
+const PREVIEW_TABS = ["overview", "plan", "readme", "landing", "config"] as const;
+
+type PreviewTab = (typeof PREVIEW_TABS)[number];
 
 export default function RepoPage() {
   const router = useRouter();
@@ -20,6 +22,7 @@ export default function RepoPage() {
   const [generated, setGenerated] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [generationError, setGenerationError] = useState("");
   const [activeTab, setActiveTab] = useState<PreviewTab>("overview");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreatingPR, setIsCreatingPR] = useState(false);
@@ -79,6 +82,7 @@ export default function RepoPage() {
     if (!owner || !repo || isGenerating) return;
 
     setIsGenerating(true);
+    setGenerationError("");
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -91,12 +95,37 @@ export default function RepoPage() {
       const data = await res.json();
       setGenerated(data);
       setActiveTab("plan");
+      setGenerationError("");
     } catch (err) {
-      setError("Failed to generate content");
+      setGenerationError("Failed to generate content");
       console.error(err);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handlePreviewTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, tab: PreviewTab) => {
+    const currentIndex = PREVIEW_TABS.indexOf(tab);
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % PREVIEW_TABS.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + PREVIEW_TABS.length) % PREVIEW_TABS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = PREVIEW_TABS.length - 1;
+    }
+
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextTab = PREVIEW_TABS[nextIndex];
+    setActiveTab(nextTab);
+    requestAnimationFrame(() => {
+      document.getElementById(getPreviewTabId(nextTab))?.focus();
+    });
   };
 
   const handleCreatePR = async () => {
@@ -254,6 +283,11 @@ export default function RepoPage() {
                   ? "Artifacts generated"
                   : "Generate artifacts"}
             </button>
+            {generationError && (
+              <p className="text-sm text-[color:var(--blocker)]" role="alert">
+                {generationError}
+              </p>
+            )}
           </aside>
 
           <section>
@@ -265,15 +299,30 @@ export default function RepoPage() {
                   Generate artifacts after reviewing the deployment diagnosis. Shipwright will
                   prepare a deployment plan, environment template, config, README, and PR payload.
                 </p>
+                {generationError && (
+                  <p className="mt-4 text-sm text-[color:var(--blocker)]" role="alert">
+                    {generationError}
+                  </p>
+                )}
               </div>
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap gap-2 border-b border-[color:var(--line)] pb-3">
-                  {(["overview", "plan", "readme", "landing", "config"] as const).map((tab) => (
+                <div
+                  className="mb-4 flex flex-wrap gap-2 border-b border-[color:var(--line)] pb-3"
+                  role="tablist"
+                  aria-label="Generated artifact previews"
+                >
+                  {PREVIEW_TABS.map((tab) => (
                     <button
                       type="button"
                       key={tab}
+                      id={getPreviewTabId(tab)}
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      aria-controls={getPreviewPanelId(tab)}
+                      tabIndex={activeTab === tab ? 0 : -1}
                       onClick={() => setActiveTab(tab)}
+                      onKeyDown={(event) => handlePreviewTabKeyDown(event, tab)}
                       className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
                         activeTab === tab
                           ? "bg-[color:var(--accent)] text-white"
@@ -285,7 +334,12 @@ export default function RepoPage() {
                   ))}
                 </div>
 
-                <div className="work-surface p-5">
+                <div
+                  className="work-surface p-5"
+                  role="tabpanel"
+                  id={getPreviewPanelId(activeTab)}
+                  aria-labelledby={getPreviewTabId(activeTab)}
+                >
                   <PreviewContent activeTab={activeTab} generated={generated} />
                 </div>
 
@@ -385,7 +439,7 @@ function PreviewContent({
         <ArtifactPreview title="vercel.json" content={generated.vercelJson || "Not applicable"} />
         <ArtifactPreview
           title=".github/workflows/shipwright-deployment-checks.yml"
-          content={generated.ciWorkflow}
+          content={generated.ciWorkflow || "Not applicable for this repository."}
         />
         <ArtifactPreview title=".env.example" content={generated.envTemplate} />
       </div>
@@ -425,6 +479,14 @@ function PreviewContent({
       }
     />
   );
+}
+
+function getPreviewTabId(tab: PreviewTab) {
+  return `preview-tab-${tab}`;
+}
+
+function getPreviewPanelId(tab: PreviewTab) {
+  return `preview-panel-${tab}`;
 }
 
 function ArtifactPreview({

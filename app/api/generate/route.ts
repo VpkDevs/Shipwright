@@ -77,13 +77,20 @@ export const POST = withErrorHandler(async (request: Request) => {
   const packageJsonScripts = generatePackageJsonScripts(analysis);
   const github = new GitHubClient(session.user.accessToken);
   const packageJsonContent = await github.getFileContent(owner, repo, "package.json");
+  const packageJson = generatePackageJsonFile(packageJsonContent, packageJsonScripts);
+  const defaultBranch = await github.getDefaultBranch(owner, repo).catch(() => "main");
+  const hasPackageJson = !analysis.deploymentIssues.some(
+    (issue) => issue.title === "No package.json found"
+  );
 
   // Fallback if Gemini fails
   const finalGenerated = {
     vercelJson: generateVercelJsonFile(analysis),
     packageJsonScripts,
-    packageJson: generatePackageJsonFile(packageJsonContent, packageJsonScripts),
-    ciWorkflow: generateCiWorkflow(analysis, packageJsonScripts),
+    packageJson,
+    ciWorkflow: hasPackageJson
+      ? generateCiWorkflow(analysis, packageJson ? packageJsonScripts : {}, defaultBranch)
+      : null,
     envTemplate: generated?.envTemplate || generateEnvTemplate(analysis),
     readme: generated?.readme || generateReadme(repo, analysis, description),
     landingPage:
