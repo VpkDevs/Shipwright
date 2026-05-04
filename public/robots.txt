@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /repos/
+
+Sitemap: https://shipwright.vercel.app/sitemap.xml
