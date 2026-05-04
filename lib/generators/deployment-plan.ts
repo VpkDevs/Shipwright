@@ -1,4 +1,5 @@
 import type { DeploymentIssue, RepoAnalysis } from "@/types";
+import { getPackageScriptCommand } from "./package-manager";
 
 export function generateDeploymentPlan(
   owner: string,
@@ -16,10 +17,10 @@ export function generateDeploymentPlan(
   const verificationCommands = [
     `${analysis.packageManager} install`,
     analysis.buildScript
-      ? getRunCommand(analysis.packageManager, "build")
+      ? getPackageScriptCommand(analysis.packageManager, "build")
       : "# Add a build script before testing local verification",
     analysis.startScript
-      ? getRunCommand(analysis.packageManager, "start")
+      ? getPackageScriptCommand(analysis.packageManager, "start")
       : "# Add a start script before testing production startup",
   ];
 
@@ -83,14 +84,6 @@ function formatIssueRows(issues: DeploymentIssue[]): string {
       return `| ${issue.severity} | ${escapeTableCell(issueText)} | ${escapeTableCell(issue.fix)} |`;
     })
     .join("\n");
-}
-
-function getRunCommand(packageManager: string, script: string): string {
-  if (packageManager === "npm") return `npm run ${script}`;
-  if (packageManager === "yarn") return `yarn ${script}`;
-  if (packageManager === "pnpm") return `pnpm ${script}`;
-  if (packageManager === "bun") return `bun run ${script}`;
-  return `${packageManager} run ${script}`;
 }
 
 function getHostingNotes(analysis: RepoAnalysis): string {

@@ -1,15 +1,21 @@
 import type { RepoAnalysis } from "@/types";
+import { getPackageScriptCommand } from "./package-manager";
 
 export function generateCiWorkflow(
   analysis: RepoAnalysis,
   generatedScripts: Record<string, string>,
   defaultBranch = "main"
 ): string {
+  const nodeSetupSteps = analysis.packageManager === "bun" ? [] : getNodeSetupSteps();
   const packageManagerSetupSteps = getPackageManagerSetupSteps(analysis.packageManager);
   const installCommand = getInstallCommand(analysis);
   const hasBuildStep = Boolean(analysis.buildScript || generatedScripts.build);
-  const buildCommand = hasBuildStep ? getRunCommand(analysis.packageManager, "build") : null;
-  const testCommand = analysis.testScript ? getRunCommand(analysis.packageManager, "test") : null;
+  const buildCommand = hasBuildStep
+    ? getPackageScriptCommand(analysis.packageManager, "build")
+    : null;
+  const testCommand = analysis.testScript
+    ? getPackageScriptCommand(analysis.packageManager, "test")
+    : null;
 
   return [
     "name: Shipwright deployment checks",
@@ -26,11 +32,7 @@ export function generateCiWorkflow(
     "      - name: Checkout",
     "        uses: actions/checkout@v4",
     "",
-    "      - name: Setup Node",
-    "        uses: actions/setup-node@v4",
-    "        with:",
-    "          node-version: 20",
-    "",
+    ...nodeSetupSteps,
     ...packageManagerSetupSteps,
     "      - name: Install dependencies",
     `        run: ${installCommand}`,
@@ -41,6 +43,16 @@ export function generateCiWorkflow(
       : "      # Add a build script before enabling a build step.",
     "",
   ].join("\n");
+}
+
+function getNodeSetupSteps(): string[] {
+  return [
+    "      - name: Setup Node",
+    "        uses: actions/setup-node@v4",
+    "        with:",
+    "          node-version: 20",
+    "",
+  ];
 }
 
 function getPackageManagerSetupSteps(packageManager: string): string[] {
@@ -71,12 +83,4 @@ function getInstallCommand(analysis: RepoAnalysis): string {
   }
 
   return `${analysis.packageManager} install`;
-}
-
-function getRunCommand(packageManager: string, script: string): string {
-  if (packageManager === "npm") return `npm run ${script}`;
-  if (packageManager === "yarn") return `yarn ${script}`;
-  if (packageManager === "pnpm") return `pnpm ${script}`;
-  if (packageManager === "bun") return `bun run ${script}`;
-  return `${packageManager} run ${script}`;
 }

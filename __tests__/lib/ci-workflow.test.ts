@@ -27,6 +27,7 @@ describe("generateCiWorkflow", () => {
     const workflow = generateCiWorkflow(baseAnalysis, {});
 
     expect(workflow).toContain('branches: ["main"]');
+    expect(workflow).toContain("uses: actions/setup-node@v4");
     expect(workflow).toContain("run: npm ci");
     expect(workflow).toContain("run: npm run test");
     expect(workflow).toContain("run: npm run build");
@@ -93,6 +94,7 @@ describe("generateCiWorkflow", () => {
     );
 
     expect(workflow).toContain("uses: oven-sh/setup-bun@v2");
+    expect(workflow).not.toContain("uses: actions/setup-node@v4");
     expect(workflow).toContain("run: bun install --frozen-lockfile");
     expect(workflow).toContain("run: bun run test");
   });
@@ -108,6 +110,7 @@ describe("generateCiWorkflow", () => {
     );
 
     expect(workflow).toContain("uses: oven-sh/setup-bun@v2");
+    expect(workflow).not.toContain("uses: actions/setup-node@v4");
     expect(workflow).toContain("run: bun install");
     expect(workflow).not.toContain("bun install --frozen-lockfile");
   });
