@@ -77,6 +77,11 @@ export default function RepoPage() {
         body: JSON.stringify({ owner, repo }),
       });
 
+      if (res.status === 402) {
+        router.push("/pricing");
+        return;
+      }
+
       if (!res.ok) throw new Error("Failed to generate");
 
       const data = await res.json();
