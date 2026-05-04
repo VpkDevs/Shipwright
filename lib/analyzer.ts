@@ -44,6 +44,7 @@ export class RepoAnalyzer {
     const backendType = this.detectBackendType(packageJson);
     const buildScript = packageJson?.scripts?.build || null;
     const startScript = packageJson?.scripts?.start || null;
+    const testScript = packageJson?.scripts?.test || null;
     const hasReadme = this.hasReadmeFile(fileList);
     const hasEnvExample = this.hasEnvExampleFile(fileList);
     const missingConfigs = this.checkMissingConfigs(packageJson, framework, hasDocker, fileList);
@@ -79,6 +80,7 @@ export class RepoAnalyzer {
       envVarsDetected: envVars,
       buildScript,
       startScript,
+      testScript,
       missingConfigs,
       deploymentIssues,
       recommendedActions,

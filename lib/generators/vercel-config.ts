@@ -46,3 +46,28 @@ export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<strin
 
   return scripts;
 }
+
+export function generatePackageJsonFile(
+  packageJsonContent: string | null,
+  generatedScripts: Record<string, string>
+): string | null {
+  if (!packageJsonContent || Object.keys(generatedScripts).length === 0) {
+    return null;
+  }
+
+  try {
+    const packageJson = JSON.parse(packageJsonContent) as {
+      scripts?: Record<string, string>;
+      [key: string]: unknown;
+    };
+
+    packageJson.scripts = {
+      ...(packageJson.scripts || {}),
+      ...generatedScripts,
+    };
+
+    return `${JSON.stringify(packageJson, null, 2)}\n`;
+  } catch {
+    return null;
+  }
+}

@@ -1,15 +1,17 @@
 "use client";
 
-import type { GeneratedContent, RepoAnalysis } from "@/types";
+import type { DeploymentIssue, GeneratedContent, RepoAnalysis } from "@/types";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface PRResult {
   url: string;
   number: number;
   title: string;
 }
+
+type PreviewTab = "overview" | "plan" | "readme" | "landing" | "config";
 
 export default function RepoPage() {
   const router = useRouter();
@@ -18,9 +20,7 @@ export default function RepoPage() {
   const [generated, setGenerated] = useState<GeneratedContent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "readme" | "landing" | "config">(
-    "overview"
-  );
+  const [activeTab, setActiveTab] = useState<PreviewTab>("overview");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const [prResult, setPRResult] = useState<PRResult | null>(null);
@@ -66,6 +66,15 @@ export default function RepoPage() {
     analyze();
   }, [owner, repo, router]);
 
+  const issueCounts = useMemo(() => {
+    const issues = analysis?.deploymentIssues ?? [];
+    return {
+      blocker: issues.filter((issue) => issue.severity === "blocker").length,
+      warning: issues.filter((issue) => issue.severity === "warning").length,
+      info: issues.filter((issue) => issue.severity === "info").length,
+    };
+  }, [analysis]);
+
   const handleGenerate = async () => {
     if (!owner || !repo || isGenerating) return;
 
@@ -81,7 +90,7 @@ export default function RepoPage() {
 
       const data = await res.json();
       setGenerated(data);
-      setActiveTab("readme");
+      setActiveTab("plan");
     } catch (err) {
       setError("Failed to generate content");
       console.error(err);
@@ -110,10 +119,19 @@ export default function RepoPage() {
     if (generated.deploymentPlan) {
       files.push({ path: "SHIPWRIGHT_DEPLOYMENT_PLAN.md", content: generated.deploymentPlan });
     }
+    if (generated.packageJson) {
+      files.push({ path: "package.json", content: generated.packageJson });
+    }
+    if (generated.ciWorkflow) {
+      files.push({
+        path: ".github/workflows/shipwright-deployment-checks.yml",
+        content: generated.ciWorkflow,
+      });
+    }
     if (generated.landingPage) {
       files.push({ path: "landing/index.html", content: generated.landingPage });
     }
-    if (Object.keys(generated.packageJsonScripts).length > 0) {
+    if (!generated.packageJson && Object.keys(generated.packageJsonScripts).length > 0) {
       files.push({
         path: "shipwright-scripts.json",
         content: JSON.stringify({ scripts: generated.packageJsonScripts }, null, 2),
@@ -144,325 +162,333 @@ export default function RepoPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-        <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-4">
-            <Link href="/repos" className="text-2xl font-bold text-blue-400">
-              ← Back
-            </Link>
-          </div>
-        </nav>
-
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
-            <p className="text-slate-400">Analyzing repository...</p>
+      <main className="min-h-screen">
+        <RepoNav repoName={repo || "Repository"} />
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="work-surface p-5">
+            <p className="section-label mb-2">Analysis</p>
+            <p className="text-muted">Scanning repository structure and deployment signals...</p>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!analysis) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-        <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-4">
-            <Link href="/repos" className="text-2xl font-bold text-blue-400">
-              ← Back
-            </Link>
-          </div>
-        </nav>
-
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          <div className="card text-center py-12">
-            <p className="text-red-400 mb-4">{error || "Repository not found"}</p>
+      <main className="min-h-screen">
+        <RepoNav repoName={repo || "Repository"} />
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="work-surface p-8">
+            <p className="mb-4 font-semibold text-[color:var(--blocker)]">
+              {error || "Repository not found"}
+            </p>
             <Link href="/repos" className="btn-secondary">
-              Back to Repos
+              Back to repos
             </Link>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <Link href="/repos" className="text-xl font-bold text-blue-400">
-            ← {repo}
-          </Link>
-          <a
-            href="/api/auth/signout"
-            className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors text-sm"
-          >
-            Sign Out
-          </a>
-        </div>
-      </nav>
+    <main className="min-h-screen">
+      <RepoNav repoName={repo || "Repository"} />
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <div className="grid md:grid-cols-3 gap-8">
-          {/* Left: Analysis Summary */}
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        <section className="mb-6 grid gap-5 lg:grid-cols-[1fr_360px]">
           <div>
-            <div className="card sticky top-24">
-              <h2 className="text-lg font-semibold mb-4">Analysis</h2>
-
-              <div className="space-y-3 text-sm">
-                <div className="rounded border border-slate-700 bg-slate-900/60 p-3">
-                  <p className="text-slate-500 text-xs mb-1">Readiness</p>
-                  <p className="text-slate-200 leading-relaxed">{analysis.readinessSummary}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Framework</p>
-                  <p className="font-semibold text-blue-400">{analysis.framework}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Package Manager</p>
-                  <p className="font-semibold">{analysis.packageManager}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Lockfile</p>
-                  <p className="font-semibold">{analysis.lockfile || "Not detected"}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Backend Type</p>
-                  <p className="font-semibold">{analysis.backendType}</p>
-                </div>
-
-                {analysis.hasDocker && (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <span>✓</span> Docker present
-                  </div>
-                )}
-
-                {analysis.hasEnvExample && (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <span>✓</span> Environment example present
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-slate-500 text-xs mb-1">Risk Score</p>
-                  <div className="w-full bg-slate-700 rounded h-2">
-                    <div
-                      className={`h-2 rounded ${
-                        analysis.deploymentRiskScore < 30
-                          ? "bg-green-500"
-                          : analysis.deploymentRiskScore < 60
-                            ? "bg-yellow-500"
-                            : "bg-red-500"
-                      }`}
-                      style={{
-                        width: `${analysis.deploymentRiskScore}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {analysis.deploymentRiskScore}% risk
-                  </p>
-                </div>
-
-                {analysis.missingConfigs.length > 0 && (
-                  <div>
-                    <p className="text-slate-500 text-xs mb-1">Missing Configs</p>
-                    <ul className="text-xs text-slate-400 space-y-1">
-                      {analysis.missingConfigs.map((config) => (
-                        <li key={config}>• {config}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {analysis.deploymentIssues.length > 0 && (
-                  <div>
-                    <p className="text-slate-500 text-xs mb-1">Deployment Issues</p>
-                    <ul className="text-xs text-slate-300 space-y-2">
-                      {analysis.deploymentIssues.slice(0, 4).map((issue, idx) => (
-                        <li
-                          key={`${issue.severity}-${issue.title}-${issue.file ?? idx}`}
-                          className="rounded border border-slate-700 bg-slate-900/60 p-2"
-                        >
-                          <span
-                            className={`mr-2 font-semibold ${
-                              issue.severity === "blocker"
-                                ? "text-red-400"
-                                : issue.severity === "warning"
-                                  ? "text-yellow-400"
-                                  : "text-blue-300"
-                            }`}
-                          >
-                            {issue.severity}
-                          </span>
-                          {issue.title}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {analysis.envVarsDetected.length > 0 && (
-                  <div>
-                    <p className="text-slate-500 text-xs mb-1">Environment Variables</p>
-                    <ul className="text-xs text-slate-400 space-y-1">
-                      {analysis.envVarsDetected.map((env) => (
-                        <li key={env}>• {env}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={isGenerating || !!generated}
-                className="btn-primary w-full mt-6 disabled:opacity-50"
-              >
-                {isGenerating ? "Generating..." : generated ? "Generated ✓" : "Generate Content"}
-              </button>
-            </div>
+            <p className="section-label mb-3">{owner}</p>
+            <h1 className="mb-3 text-4xl font-semibold">{repo}</h1>
+            <p className="text-muted max-w-3xl">{analysis.readinessSummary}</p>
           </div>
 
-          {/* Right: Content Preview */}
-          <div className="md:col-span-2">
+          <div className="work-surface grid grid-cols-3 divide-x divide-[color:var(--line)]">
+            <Metric label="Risk" value={`${analysis.deploymentRiskScore}%`} />
+            <Metric label="Blockers" value={String(issueCounts.blocker)} tone="blocker" />
+            <Metric label="Warnings" value={String(issueCounts.warning)} tone="warning" />
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
+          <aside className="space-y-4">
+            <div className="work-surface p-5">
+              <p className="section-label mb-4">Stack facts</p>
+              <Fact label="Framework" value={analysis.framework} />
+              <Fact label="Package manager" value={analysis.packageManager} />
+              <Fact label="Lockfile" value={analysis.lockfile || "Not detected"} />
+              <Fact label="Backend" value={analysis.backendType} />
+              <Fact label="Docker" value={analysis.hasDocker ? "Present" : "Not detected"} />
+              <Fact
+                label="Environment example"
+                value={analysis.hasEnvExample ? "Present" : "Not detected"}
+              />
+            </div>
+
+            <div className="work-surface p-5">
+              <p className="section-label mb-4">Deployment issues</p>
+              {analysis.deploymentIssues.length > 0 ? (
+                <div className="space-y-3">
+                  {analysis.deploymentIssues.map((issue, idx) => (
+                    <IssueItem
+                      key={`${issue.severity}-${issue.title}-${issue.file ?? idx}`}
+                      issue={issue}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted text-sm">No deployment issues detected.</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating || !!generated}
+              className="btn-primary w-full py-3"
+            >
+              {isGenerating
+                ? "Generating artifacts..."
+                : generated
+                  ? "Artifacts generated"
+                  : "Generate artifacts"}
+            </button>
+          </aside>
+
+          <section>
             {!generated ? (
-              <div className="card text-center py-12">
-                <div className="text-4xl mb-4">📋</div>
-                <p className="text-slate-400 mb-4">
-                  Click &quot;Generate Content&quot; to create deployment configs, a deployment
-                  plan, README, and landing page.
+              <div className="work-surface p-8">
+                <p className="section-label mb-3">Generated artifacts</p>
+                <h2 className="mb-3 text-2xl font-semibold">No generated files yet.</h2>
+                <p className="text-muted max-w-2xl">
+                  Generate artifacts after reviewing the deployment diagnosis. Shipwright will
+                  prepare a deployment plan, environment template, config, README, and PR payload.
                 </p>
               </div>
             ) : (
               <>
-                <div className="flex gap-2 mb-6 border-b border-slate-700">
+                <div className="mb-4 flex flex-wrap gap-2 border-b border-[color:var(--line)] pb-3">
                   {(["overview", "plan", "readme", "landing", "config"] as const).map((tab) => (
                     <button
                       type="button"
                       key={tab}
                       onClick={() => setActiveTab(tab)}
-                      className={`px-4 py-2 font-medium text-sm transition-colors ${
+                      className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
                         activeTab === tab
-                          ? "text-blue-400 border-b-2 border-blue-400"
-                          : "text-slate-400 hover:text-slate-300"
+                          ? "bg-[color:var(--accent)] text-white"
+                          : "text-[color:var(--ink-muted)] hover:bg-[color:rgb(36_81_90_/_0.08)]"
                       }`}
                     >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {tab}
                     </button>
                   ))}
                 </div>
 
-                <div className="card">
-                  {activeTab === "overview" && (
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Vercel Config</h3>
-                        <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-green-400">
-                          {generated.vercelJson || "Not applicable for this framework"}
-                        </pre>
-                      </div>
-                      <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Environment Template</h3>
-                        <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300">
-                          {generated.envTemplate}
-                        </pre>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === "readme" && (
-                    <div className="prose prose-invert max-w-none text-sm">
-                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96 whitespace-pre-wrap">
-                        {generated.readme}
-                      </pre>
-                    </div>
-                  )}
-
-                  {activeTab === "plan" && (
-                    <div className="space-y-4">
-                      <p className="text-slate-400 text-sm">
-                        Deployment plan — will be saved as{" "}
-                        <code className="bg-slate-700 px-1 rounded">
-                          SHIPWRIGHT_DEPLOYMENT_PLAN.md
-                        </code>
-                      </p>
-                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96 whitespace-pre-wrap">
-                        {generated.deploymentPlan}
-                      </pre>
-                    </div>
-                  )}
-
-                  {activeTab === "landing" && (
-                    <div className="space-y-4">
-                      <p className="text-slate-400 text-sm">
-                        Landing page HTML — will be saved as{" "}
-                        <code className="bg-slate-700 px-1 rounded">landing/index.html</code>
-                      </p>
-                      <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-slate-300 max-h-96">
-                        {generated.landingPage.substring(0, 1000)}
-                        {generated.landingPage.length > 1000 ? "\n... (truncated)" : ""}
-                      </pre>
-                    </div>
-                  )}
-
-                  {activeTab === "config" && (
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm text-slate-500 mb-2">Suggested Scripts</h3>
-                        {Object.keys(generated.packageJsonScripts).length > 0 ? (
-                          <pre className="bg-slate-900 p-3 rounded text-xs overflow-x-auto text-blue-400">
-                            {JSON.stringify(generated.packageJsonScripts, null, 2)}
-                          </pre>
-                        ) : (
-                          <p className="text-slate-400 text-sm">
-                            No missing scripts detected — your package.json already has the required
-                            scripts.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                <div className="work-surface p-5">
+                  <PreviewContent activeTab={activeTab} generated={generated} />
                 </div>
 
-                {prResult ? (
-                  <div className="mt-6 bg-green-900/50 border border-green-700 rounded-lg p-4">
-                    <p className="text-green-400 font-semibold mb-1">✓ Pull Request Created!</p>
-                    <p className="text-green-300 text-sm mb-3">
-                      PR #{prResult.number}: {prResult.title}
-                    </p>
-                    <a
-                      href={prResult.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-primary inline-block"
-                    >
-                      View Pull Request →
-                    </a>
-                  </div>
-                ) : (
-                  <div className="mt-6">
-                    {prError && <p className="text-red-400 text-sm mb-3">{prError}</p>}
-                    <button
-                      type="button"
-                      onClick={handleCreatePR}
-                      disabled={isCreatingPR}
-                      className="btn-primary w-full disabled:opacity-50"
-                    >
-                      {isCreatingPR ? "Creating Pull Request..." : "🚢 Create Pull Request"}
-                    </button>
-                  </div>
-                )}
+                <PRPanel
+                  prResult={prResult}
+                  prError={prError}
+                  isCreatingPR={isCreatingPR}
+                  onCreatePR={handleCreatePR}
+                />
               </>
             )}
-          </div>
-        </div>
+          </section>
+        </section>
       </div>
+    </main>
+  );
+}
+
+function RepoNav({ repoName }: { repoName: string }) {
+  return (
+    <nav className="sticky top-0 z-50 border-b border-[color:var(--line)] bg-[color:rgb(244_243_238_/_0.9)] backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/repos" className="text-lg font-semibold">
+          Back to repos / {repoName}
+        </Link>
+        <a href="/api/auth/signout" className="btn-secondary">
+          Sign out
+        </a>
+      </div>
+    </nav>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "blocker" | "warning";
+}) {
+  const toneClass =
+    tone === "blocker" ? "severity-blocker" : tone === "warning" ? "severity-warning" : "";
+
+  return (
+    <div className="p-4">
+      <p className="section-label mb-1">{label}</p>
+      <p className={`text-2xl font-semibold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-t border-[color:var(--line)] py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <p className="section-label mb-1">{label}</p>
+      <p className="font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function IssueItem({ issue }: { issue: DeploymentIssue }) {
+  const tone =
+    issue.severity === "blocker"
+      ? "severity-blocker"
+      : issue.severity === "warning"
+        ? "severity-warning"
+        : "severity-info";
+
+  return (
+    <div className="rounded-md border border-[color:var(--line)] p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className={`text-xs font-semibold uppercase ${tone}`}>{issue.severity}</span>
+        {issue.file && (
+          <code className="rounded bg-[color:rgb(24_26_31_/_0.07)] px-1.5 py-0.5 text-xs">
+            {issue.file}
+          </code>
+        )}
+      </div>
+      <p className="font-semibold">{issue.title}</p>
+      <p className="text-muted mt-1 text-sm">{issue.fix}</p>
+    </div>
+  );
+}
+
+function PreviewContent({
+  activeTab,
+  generated,
+}: {
+  activeTab: PreviewTab;
+  generated: GeneratedContent;
+}) {
+  if (activeTab === "overview") {
+    return (
+      <div className="space-y-5">
+        <ArtifactPreview title="vercel.json" content={generated.vercelJson || "Not applicable"} />
+        <ArtifactPreview
+          title=".github/workflows/shipwright-deployment-checks.yml"
+          content={generated.ciWorkflow}
+        />
+        <ArtifactPreview title=".env.example" content={generated.envTemplate} />
+      </div>
+    );
+  }
+
+  if (activeTab === "plan") {
+    return (
+      <ArtifactPreview
+        title="SHIPWRIGHT_DEPLOYMENT_PLAN.md"
+        content={generated.deploymentPlan}
+        tall
+      />
+    );
+  }
+
+  if (activeTab === "readme") {
+    return <ArtifactPreview title="README.md" content={generated.readme} tall />;
+  }
+
+  if (activeTab === "landing") {
+    const content =
+      generated.landingPage.length > 1400
+        ? `${generated.landingPage.substring(0, 1400)}\n... truncated preview`
+        : generated.landingPage;
+    return <ArtifactPreview title="landing/index.html" content={content} tall />;
+  }
+
+  return (
+    <ArtifactPreview
+      title={generated.packageJson ? "package.json" : "Suggested package scripts"}
+      content={
+        generated.packageJson ||
+        (Object.keys(generated.packageJsonScripts).length > 0
+          ? JSON.stringify(generated.packageJsonScripts, null, 2)
+          : "No missing scripts detected.")
+      }
+    />
+  );
+}
+
+function ArtifactPreview({
+  title,
+  content,
+  tall = false,
+}: {
+  title: string;
+  content: string;
+  tall?: boolean;
+}) {
+  return (
+    <div>
+      <p className="section-label mb-2">{title}</p>
+      <pre
+        className={`code-panel overflow-x-auto whitespace-pre-wrap ${tall ? "max-h-[520px]" : "max-h-72"}`}
+      >
+        {content}
+      </pre>
+    </div>
+  );
+}
+
+function PRPanel({
+  prResult,
+  prError,
+  isCreatingPR,
+  onCreatePR,
+}: {
+  prResult: PRResult | null;
+  prError: string;
+  isCreatingPR: boolean;
+  onCreatePR: () => void;
+}) {
+  if (prResult) {
+    return (
+      <div className="mt-5 rounded-md border border-[color:var(--success)] bg-green-50 p-4">
+        <p className="font-semibold text-[color:var(--success)]">Pull request created</p>
+        <p className="text-muted mt-1 text-sm">
+          PR #{prResult.number}: {prResult.title}
+        </p>
+        <a
+          href={prResult.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-primary mt-4"
+        >
+          View pull request
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5">
+      {prError && <p className="mb-3 text-sm text-[color:var(--blocker)]">{prError}</p>}
+      <button
+        type="button"
+        onClick={onCreatePR}
+        disabled={isCreatingPR}
+        className="btn-primary w-full py-3"
+      >
+        {isCreatingPR ? "Creating pull request..." : "Create pull request"}
+      </button>
     </div>
   );
 }

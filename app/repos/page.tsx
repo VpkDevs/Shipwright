@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface Repo {
   id: number;
@@ -42,126 +42,143 @@ export default function ReposPage() {
     fetchRepos();
   }, [router]);
 
-  const filteredRepos = repos.filter((repo) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      repo.name.toLowerCase().includes(q) ||
-      (repo.description?.toLowerCase().includes(q) ?? false) ||
-      (repo.language?.toLowerCase().includes(q) ?? false)
-    );
-  });
+  const filteredRepos = useMemo(() => {
+    return repos.filter((repo) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        repo.name.toLowerCase().includes(q) ||
+        (repo.description?.toLowerCase().includes(q) ?? false) ||
+        (repo.language?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [repos, search]);
+
+  const languages = new Set(repos.map((repo) => repo.language).filter(Boolean)).size;
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-        <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <Link href="/" className="text-2xl font-bold text-blue-400">
-              Shipwright
-            </Link>
-          </div>
-        </nav>
-
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
-            <p className="text-slate-400">Loading repositories...</p>
+      <main className="min-h-screen">
+        <ReposNav />
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="work-surface p-5">
+            <p className="section-label mb-2">Repository queue</p>
+            <p className="text-muted">Loading GitHub repositories...</p>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-blue-400">
-            Shipwright
-          </Link>
-          <a
-            href="/api/auth/signout"
-            className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
-          >
-            Sign Out
-          </a>
-        </div>
-      </nav>
+    <main className="min-h-screen">
+      <ReposNav />
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Your Repositories</h1>
-          <p className="text-slate-400">
-            Select a repository to analyze and prepare for deployment
-          </p>
+      <section className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div>
+            <p className="section-label mb-3">Repository queue</p>
+            <h1 className="mb-3 text-4xl font-semibold">Choose a repo to diagnose.</h1>
+            <p className="text-muted max-w-2xl">
+              Shipwright will inspect the selected project and produce deployment blockers,
+              warnings, generated files, and a PR-ready plan.
+            </p>
+          </div>
+
+          <div className="work-surface grid grid-cols-3 divide-x divide-[color:var(--line)]">
+            <Metric label="Repos" value={String(repos.length)} />
+            <Metric label="Shown" value={String(filteredRepos.length)} />
+            <Metric label="Langs" value={String(languages)} />
+          </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-5">
+          <label htmlFor="repo-search" className="section-label mb-2 block">
+            Filter
+          </label>
           <input
+            id="repo-search"
             type="text"
-            placeholder="Search repositories by name, description, or language..."
+            placeholder="Name, description, or language"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+            className="input-field"
           />
         </div>
 
         {error && (
-          <div className="bg-red-900 border border-red-700 rounded-lg p-4 mb-8 text-red-200">
+          <div className="mb-6 rounded-md border border-[color:var(--blocker)] bg-red-50 p-4 text-sm text-[color:var(--blocker)]">
             {error}
           </div>
         )}
 
         {filteredRepos.length === 0 ? (
-          <div className="card text-center py-12">
-            {repos.length === 0 ? (
-              <>
-                <p className="text-slate-400 mb-4">No repositories found</p>
-                <p className="text-slate-500 text-sm">
-                  Create a repository on GitHub to get started
-                </p>
-              </>
-            ) : (
-              <p className="text-slate-400">No repositories match &quot;{search}&quot;</p>
-            )}
+          <div className="work-surface p-8">
+            <p className="font-semibold">
+              {repos.length === 0 ? "No repositories found" : `No repositories match "${search}"`}
+            </p>
+            <p className="text-muted mt-1 text-sm">
+              {repos.length === 0
+                ? "GitHub returned no repositories for this account."
+                : "Clear the filter or search for a different repository signal."}
+            </p>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="work-surface divide-y divide-[color:var(--line)]">
             {filteredRepos.map((repo) => (
               <Link
                 key={repo.id}
                 href={`/repos/${repo.full_name}`}
-                className="card hover:border-blue-500 transition-colors cursor-pointer group"
+                className="grid gap-4 p-5 transition-colors hover:bg-[color:rgb(36_81_90_/_0.06)] md:grid-cols-[1fr_220px_48px]"
               >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-semibold text-blue-400 group-hover:text-blue-300 transition-colors">
-                      {repo.name}
-                    </h3>
-                    <p className="text-slate-400 mt-2">{repo.description || "No description"}</p>
-                    <div className="flex gap-4 mt-4 text-sm text-slate-500">
-                      {repo.language && (
-                        <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 bg-blue-500 rounded-full" />
-                          {repo.language}
-                        </span>
-                      )}
-                      {repo.stargazers_count > 0 && <span>⭐ {repo.stargazers_count}</span>}
-                    </div>
-                  </div>
-                  <div className="text-2xl group-hover:scale-110 transition-transform">→</div>
+                <div>
+                  <h2 className="text-lg font-semibold">{repo.name}</h2>
+                  <p className="text-muted mt-1 line-clamp-2 text-sm">
+                    {repo.description || "No repository description."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-start gap-2 text-sm md:justify-end">
+                  {repo.language && (
+                    <span className="rounded-md border border-[color:var(--line)] px-2 py-1">
+                      {repo.language}
+                    </span>
+                  )}
+                  <span className="rounded-md border border-[color:var(--line)] px-2 py-1">
+                    {repo.stargazers_count} stars
+                  </span>
+                </div>
+                <div className="hidden items-center justify-end text-sm font-semibold md:flex">
+                  Open
                 </div>
               </Link>
             ))}
-            {search && (
-              <p className="text-slate-500 text-sm text-center mt-2">
-                Showing {filteredRepos.length} of {repos.length} repositories
-              </p>
-            )}
           </div>
         )}
+      </section>
+    </main>
+  );
+}
+
+function ReposNav() {
+  return (
+    <nav className="sticky top-0 z-50 border-b border-[color:var(--line)] bg-[color:rgb(244_243_238_/_0.9)] backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="text-xl font-semibold">
+          Shipwright
+        </Link>
+        <a href="/api/auth/signout" className="btn-secondary">
+          Sign out
+        </a>
       </div>
+    </nav>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="p-4">
+      <p className="section-label mb-1">{label}</p>
+      <p className="text-2xl font-semibold">{value}</p>
     </div>
   );
 }

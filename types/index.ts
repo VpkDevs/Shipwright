@@ -19,6 +19,7 @@ export interface RepoAnalysis {
   envVarsDetected: string[];
   buildScript: string | null;
   startScript: string | null;
+  testScript: string | null;
   missingConfigs: string[];
   deploymentIssues: DeploymentIssue[];
   recommendedActions: string[];
@@ -30,6 +31,8 @@ export interface RepoAnalysis {
 export interface GeneratedContent {
   vercelJson: string;
   packageJsonScripts: Record<string, string>;
+  packageJson: string | null;
+  ciWorkflow: string;
   envTemplate: string;
   readme: string;
   landingPage: string;

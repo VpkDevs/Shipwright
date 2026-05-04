@@ -1,4 +1,3 @@
-import { checkRateLimit } from "@/lib/rate-limit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@upstash/ratelimit", () => {
@@ -23,23 +22,42 @@ vi.mock("@upstash/redis", () => ({
 describe("Rate Limiting", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+  });
+
+  it("falls back locally when Upstash is not configured", async () => {
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+
+    const result = await checkRateLimit("user-123", "/api/analyze");
+
+    expect(result.success).toBe(true);
+    expect(result.limit).toBe(10);
+    expect(result.remaining).toBe(10);
+    expect(result.reset).toBe(0);
   });
 
   it("returns success when limit not exceeded", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+
     const result = await checkRateLimit("user-123", "/api/analyze");
+
     expect(result.success).toBe(true);
     expect(result.remaining).toBe(9);
   });
 
   it("calculates retryAfter in seconds", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+
     const result = await checkRateLimit("user-123", "/api/analyze");
+
     expect(result.retryAfter).toBeDefined();
     expect(typeof result.retryAfter).toBe("number");
-  });
-
-  it("includes limit and reset info", async () => {
-    const result = await checkRateLimit("user-123", "/api/analyze");
-    expect(result.limit).toBeGreaterThan(0);
-    expect(result.reset).toBeGreaterThan(0);
   });
 });

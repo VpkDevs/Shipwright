@@ -4,11 +4,17 @@ import { getDb } from "@/lib/db";
 import { repositories } from "@/lib/db/schema";
 import { RateLimitError, ValidationError } from "@/lib/errors";
 import { generateContentWithGemini } from "@/lib/gemini-generator";
+import { generateCiWorkflow } from "@/lib/generators/ci-workflow";
 import { generateDeploymentPlan } from "@/lib/generators/deployment-plan";
 import { generateEnvTemplate } from "@/lib/generators/env-template";
 import { generateLandingPage } from "@/lib/generators/landing";
 import { generateReadme } from "@/lib/generators/readme";
-import { generatePackageJsonScripts, generateVercelJsonFile } from "@/lib/generators/vercel-config";
+import {
+  generatePackageJsonFile,
+  generatePackageJsonScripts,
+  generateVercelJsonFile,
+} from "@/lib/generators/vercel-config";
+import { GitHubClient } from "@/lib/github";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withErrorHandler } from "@/lib/with-error-handler";
 import { eq } from "drizzle-orm";
@@ -68,11 +74,16 @@ export const POST = withErrorHandler(async (request: Request) => {
   const readinessSummary = cachedRepo?.readinessSummary || "Repository analysis";
 
   const generated = await generateContentWithGemini(repo, owner, framework, deps, readinessSummary);
+  const packageJsonScripts = generatePackageJsonScripts(analysis);
+  const github = new GitHubClient(session.user.accessToken);
+  const packageJsonContent = await github.getFileContent(owner, repo, "package.json");
 
   // Fallback if Gemini fails
   const finalGenerated = {
     vercelJson: generateVercelJsonFile(analysis),
-    packageJsonScripts: generatePackageJsonScripts(analysis),
+    packageJsonScripts,
+    packageJson: generatePackageJsonFile(packageJsonContent, packageJsonScripts),
+    ciWorkflow: generateCiWorkflow(analysis, packageJsonScripts),
     envTemplate: generated?.envTemplate || generateEnvTemplate(analysis),
     readme: generated?.readme || generateReadme(repo, analysis, description),
     landingPage:

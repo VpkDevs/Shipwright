@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Shipwright",
-  description: "Turn dormant repos into live products in minutes",
+  description: "Deployment readiness for solo builders with unfinished GitHub repos",
 };
 
 export default function RootLayout({

@@ -25,174 +25,199 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
-          <p className="text-slate-400">Loading...</p>
+      <main className="min-h-screen">
+        <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
+          <div className="work-surface px-6 py-5">
+            <p className="section-label mb-2">Session</p>
+            <p className="text-muted text-sm">Checking GitHub authentication...</p>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-        <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-blue-400">Shipwright</h1>
-            <div className="flex gap-4">
-              <Link
-                href="/repos"
-                className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
-              >
-                Repos
-              </Link>
-              <a
-                href="/api/auth/signout"
-                className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
-              >
-                Sign Out
-              </a>
-            </div>
-          </div>
-        </nav>
-
-        <div className="max-w-6xl mx-auto px-6 py-12">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold mb-4">Welcome back!</h2>
-            <p className="text-slate-400 text-lg">
-              Ready to turn your repositories into live products?
+      <main className="min-h-screen">
+        <TopNav />
+        <section className="mx-auto max-w-6xl px-6 py-10">
+          <div className="mb-8 max-w-3xl">
+            <p className="section-label mb-3">Workbench</p>
+            <h1 className="mb-3 text-4xl font-semibold text-[color:var(--ink)]">
+              Deployment diagnosis for the repos you have not touched in months.
+            </h1>
+            <p className="text-muted text-lg">
+              Shipwright turns a repository into a readiness report, generated artifacts, and a
+              reviewable pull request.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
             <Link
               href="/repos"
-              className="card hover:border-blue-500 transition-colors cursor-pointer"
+              className="work-surface block p-6 transition-colors hover:border-[color:var(--accent)]"
             >
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">📦</div>
-                  <h3 className="text-lg font-semibold">My Repositories</h3>
+              <div className="mb-12 flex items-start justify-between gap-6">
+                <div>
+                  <p className="section-label mb-2">Primary queue</p>
+                  <h2 className="text-2xl font-semibold">Analyze repositories</h2>
                 </div>
+                <span className="rounded-md border border-[color:var(--line)] px-3 py-1 text-sm font-semibold">
+                  Open
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {["Detect stack", "Classify blockers", "Generate PR"].map((label, index) => (
+                  <div key={label} className="border-t border-[color:var(--line)] pt-3">
+                    <p className="section-label mb-1">{String(index + 1).padStart(2, "0")}</p>
+                    <p className="font-semibold">{label}</p>
+                  </div>
+                ))}
               </div>
             </Link>
 
-            <div className="card opacity-50">
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">📊</div>
-                  <h3 className="text-lg font-semibold">Dashboard</h3>
-                  <p className="text-xs text-slate-400 mt-2">Coming soon</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="card opacity-50">
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">⚙️</div>
-                  <h3 className="text-lg font-semibold">Settings</h3>
-                  <p className="text-xs text-slate-400 mt-2">Coming soon</p>
-                </div>
+            <div className="work-surface p-6">
+              <p className="section-label mb-3">Operating stance</p>
+              <div className="space-y-4 text-sm">
+                <StatusLine label="Truth first" value="Show blockers before generated polish" />
+                <StatusLine label="Reviewable" value="Every change lands in a PR" />
+                <StatusLine label="No magic" value="Inferences stay visible" />
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <nav className="border-b border-slate-700 bg-slate-800/50 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-400">Shipwright</h1>
-          <p className="text-slate-400">Turn dormant repos into live products</p>
-        </div>
-      </nav>
+    <main className="min-h-screen">
+      <TopNav signedOut />
 
-      <div className="max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-12">
-          <h2 className="text-5xl font-bold mb-4 text-white">From Repository to Production</h2>
-          <p className="text-xl text-slate-400 mb-8">
-            Shipwright collapses the gap between your GitHub repos and deployed products. Get
-            deployment-ready configs, documentation, and landing pages in minutes.
+      <section className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[1fr_440px] lg:items-start">
+        <div className="max-w-3xl">
+          <p className="section-label mb-4">Shipwright</p>
+          <h1 className="mb-6 text-5xl font-semibold leading-[1.02] text-[color:var(--ink)]">
+            Deployment readiness for solo builders with unfinished repos.
+          </h1>
+          <p className="text-muted mb-8 max-w-2xl text-xl">
+            Connect GitHub, select a repository, and get a concrete deployment diagnosis with
+            generated files ready for review.
           </p>
-
-          <div className="flex gap-4 justify-center flex-col sm:flex-row">
-            <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg">
-              Sign In with GitHub
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <a href="/api/auth/signin/github" className="btn-primary px-5 py-3">
+              Sign in with GitHub
             </a>
-            <a href="#features" className="btn-secondary px-8 py-3 text-lg">
-              Learn More
+            <a href="#system" className="btn-secondary px-5 py-3">
+              View workflow
             </a>
           </div>
         </div>
 
-        <div id="features" className="mt-20">
-          <h3 className="text-3xl font-bold text-center mb-12">Features</h3>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="card">
-              <div className="text-4xl mb-3">🔍</div>
-              <h4 className="text-lg font-semibold mb-2">Repo Analysis</h4>
-              <p className="text-slate-400">
-                Automatically detect your framework, dependencies, and deployment requirements.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">⚡</div>
-              <h4 className="text-lg font-semibold mb-2">Config Generation</h4>
-              <p className="text-slate-400">
-                Generate Vercel configs, environment templates, and deployment scripts
-                automatically.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">📝</div>
-              <h4 className="text-lg font-semibold mb-2">Documentation</h4>
-              <p className="text-slate-400">
-                Get production-ready READMEs and landing pages generated from your repo.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">🚀</div>
-              <h4 className="text-lg font-semibold mb-2">PR Ready</h4>
-              <p className="text-slate-400">
-                All changes packaged into a single pull request for your review.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">✅</div>
-              <h4 className="text-lg font-semibold mb-2">Deploy Button</h4>
-              <p className="text-slate-400">
-                One-click deployment to Vercel with all configurations ready.
-              </p>
-            </div>
-
-            <div className="card">
-              <div className="text-4xl mb-3">⏱️</div>
-              <h4 className="text-lg font-semibold mb-2">15 Minutes</h4>
-              <p className="text-slate-400">
-                From repo to live URL in under 15 minutes. That&apos;s the goal.
-              </p>
-            </div>
+        <div className="work-surface p-5">
+          <p className="section-label mb-4">Readiness output</p>
+          <div className="space-y-3">
+            <SignalRow severity="blocker" title="Missing build script" detail="package.json" />
+            <SignalRow
+              severity="warning"
+              title="Environment variables need documentation"
+              detail=".env.example"
+            />
+            <SignalRow severity="info" title="Node version is not pinned" detail="package.json" />
+          </div>
+          <div className="mt-6 rounded-md bg-[color:var(--code-bg)] p-4 text-sm text-[color:var(--code-fg)]">
+            <p className="mb-2 font-semibold">SHIPWRIGHT_DEPLOYMENT_PLAN.md</p>
+            <p className="text-[color:rgb(215_226_223_/_0.78)]">
+              Readiness summary, deployment issues, environment variables, verification commands,
+              and hosting notes.
+            </p>
           </div>
         </div>
+      </section>
 
-        <div className="mt-20 text-center">
-          <p className="text-slate-400 mb-6">
-            Shipwright is built for solo builders and indie developers who want to ship fast.
-          </p>
-          <a href="/api/auth/signin/github" className="btn-primary px-8 py-3 text-lg inline-block">
-            Get Started Now
-          </a>
+      <section id="system" className="mx-auto max-w-6xl px-6 pb-16">
+        <div className="work-surface divide-y divide-[color:var(--line)]">
+          {[
+            [
+              "Repository scan",
+              "Framework, package manager, lockfile, scripts, Docker, env usage.",
+            ],
+            ["Deployment doctor", "Blockers, warnings, informational findings, and risk score."],
+            [
+              "Generated PR",
+              "Deployment plan, environment template, config, docs, and review notes.",
+            ],
+          ].map(([title, detail], index) => (
+            <div key={title} className="grid gap-3 p-5 md:grid-cols-[96px_1fr]">
+              <p className="section-label">{String(index + 1).padStart(2, "0")}</p>
+              <div>
+                <h2 className="font-semibold">{title}</h2>
+                <p className="text-muted text-sm">{detail}</p>
+              </div>
+            </div>
+          ))}
         </div>
+      </section>
+    </main>
+  );
+}
+
+function TopNav({ signedOut = false }: { signedOut?: boolean }) {
+  return (
+    <nav className="border-b border-[color:var(--line)] bg-[color:rgb(244_243_238_/_0.86)] backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="text-xl font-semibold">
+          Shipwright
+        </Link>
+        {signedOut ? (
+          <p className="text-muted text-sm">Deployment doctor for solo builders</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Link href="/repos" className="btn-secondary">
+              Repos
+            </Link>
+            <a href="/api/auth/signout" className="btn-secondary">
+              Sign out
+            </a>
+          </div>
+        )}
       </div>
+    </nav>
+  );
+}
+
+function SignalRow({
+  severity,
+  title,
+  detail,
+}: {
+  severity: "blocker" | "warning" | "info";
+  title: string;
+  detail: string;
+}) {
+  const tone =
+    severity === "blocker"
+      ? "severity-blocker"
+      : severity === "warning"
+        ? "severity-warning"
+        : "severity-info";
+
+  return (
+    <div className="grid grid-cols-[88px_1fr] gap-3 rounded-md border border-[color:var(--line)] p-3">
+      <p className={`text-xs font-semibold uppercase ${tone}`}>{severity}</p>
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="text-muted text-sm">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-t border-[color:var(--line)] pt-3 first:border-t-0 first:pt-0">
+      <p className="font-semibold">{label}</p>
+      <p className="text-muted">{value}</p>
     </div>
   );
 }

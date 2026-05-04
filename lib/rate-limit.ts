@@ -1,11 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
-});
-
 const limits = {
   "/api/repos": { requests: 30, window: "1 m" },
   "/api/analyze": { requests: 10, window: "1 m" },
@@ -14,15 +9,42 @@ const limits = {
 };
 
 const ratelimits: Record<string, Ratelimit> = {};
+let redis: Redis | null = null;
 
-function getRateLimit(route: string) {
-  if (!ratelimits[route]) {
-    const config = limits[route as keyof typeof limits] || {
+function getLimitConfig(route: string) {
+  return (
+    limits[route as keyof typeof limits] || {
       requests: 10,
       window: "1 m",
-    };
+    }
+  );
+}
+
+function getRedisClient(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    return null;
+  }
+
+  if (!redis) {
+    redis = new Redis({ url, token });
+  }
+
+  return redis;
+}
+
+function getRateLimit(route: string) {
+  const redisClient = getRedisClient();
+  if (!redisClient) {
+    return null;
+  }
+
+  if (!ratelimits[route]) {
+    const config = getLimitConfig(route);
     ratelimits[route] = new Ratelimit({
-      redis,
+      redis: redisClient,
       limiter: Ratelimit.slidingWindow(
         config.requests,
         config.window as "1 s" | "1 m" | "1 h" | "1 d"
@@ -42,6 +64,17 @@ export interface RateLimitResult {
 
 export async function checkRateLimit(userId: string, route: string): Promise<RateLimitResult> {
   const ratelimit = getRateLimit(route);
+  const config = getLimitConfig(route);
+
+  if (!ratelimit) {
+    return {
+      success: true,
+      limit: config.requests,
+      remaining: config.requests,
+      reset: 0,
+    };
+  }
+
   const key = `${userId}:${route}`;
 
   const result = await ratelimit.limit(key);
