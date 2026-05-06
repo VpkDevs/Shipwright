@@ -45,12 +45,14 @@ export const authOptions: NextAuthOptions = {
       }
       if (profile) {
         token.profile = profile;
+        token.userId = String((profile as { id?: number | string }).id || "");
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.accessToken = token.accessToken || process.env.DEV_GITHUB_TOKEN || undefined;
+        session.user.id = token.userId || undefined;
       }
       return session;
     },
