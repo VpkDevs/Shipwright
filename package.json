@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -22,7 +25,7 @@
     "@upstash/redis": "^1.38.0",
     "@vercel/postgres": "^0.10.0",
     "drizzle-orm": "^0.45.2",
-    "jose": "^5.10.0",
+    "jose": "^6.2.3",
     "next": "^15.5.15",
     "next-auth": "^4.24.14",
     "pino": "^10.3.1",
