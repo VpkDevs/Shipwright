@@ -20,6 +20,15 @@ const IGNORED_PATH_PARTS = [
   ".vercel/",
 ];
 const SOURCE_FILE_SCAN_CONCURRENCY = 5;
+const DEFAULT_NPM_TEST_SCRIPT = 'echo "Error: no test specified" && exit 1';
+
+export function getUsableTestScript(script: string | undefined): string | null {
+  if (!script) {
+    return null;
+  }
+
+  return script.trim() === DEFAULT_NPM_TEST_SCRIPT ? null : script;
+}
 
 export class RepoAnalyzer {
   private client: GitHubClient;
@@ -44,6 +53,7 @@ export class RepoAnalyzer {
     const backendType = this.detectBackendType(packageJson);
     const buildScript = packageJson?.scripts?.build || null;
     const startScript = packageJson?.scripts?.start || null;
+    const testScript = getUsableTestScript(packageJson?.scripts?.test);
     const hasReadme = this.hasReadmeFile(fileList);
     const hasEnvExample = this.hasEnvExampleFile(fileList);
     const missingConfigs = this.checkMissingConfigs(packageJson, framework, hasDocker, fileList);
@@ -79,6 +89,7 @@ export class RepoAnalyzer {
       envVarsDetected: envVars,
       buildScript,
       startScript,
+      testScript,
       missingConfigs,
       deploymentIssues,
       recommendedActions,

@@ -27,22 +27,54 @@ export function generateVercelJsonFile(analysis: RepoAnalysis): string {
 
 export function generatePackageJsonScripts(analysis: RepoAnalysis): Record<string, string> {
   const scripts: Record<string, string> = {};
+  const needsDevScript = analysis.missingConfigs.includes("dev script");
 
-  if (!analysis.buildScript) {
-    if (analysis.framework === "Next.js") {
+  if (analysis.framework === "Next.js") {
+    if (!analysis.buildScript) {
       scripts.build = "next build";
+    }
+    if (!analysis.startScript) {
       scripts.start = "next start";
+    }
+    if (needsDevScript) {
       scripts.dev = "next dev";
-    } else if (analysis.framework === "React") {
-      scripts.build = "vite build";
-      scripts.start = "vite build && vite preview";
-      scripts.dev = "vite";
-    } else if (analysis.framework === "Vue") {
-      scripts.build = "vite build";
-      scripts.start = "vite build && vite preview";
-      scripts.dev = "vite";
     }
   }
 
   return scripts;
+}
+
+export function generatePackageJsonFile(
+  packageJsonContent: string | null,
+  generatedScripts: Record<string, string>
+): string | null {
+  if (!packageJsonContent || Object.keys(generatedScripts).length === 0) {
+    return null;
+  }
+
+  try {
+    const packageJson = JSON.parse(packageJsonContent) as {
+      scripts?: Record<string, string>;
+      [key: string]: unknown;
+    };
+
+    const existingScripts = packageJson.scripts ?? {};
+    packageJson.scripts = { ...existingScripts };
+    let addedScript = false;
+    for (const [name, command] of Object.entries(generatedScripts)) {
+      // Shipwright should add missing scripts without clobbering project-specific commands.
+      if (!(name in packageJson.scripts)) {
+        packageJson.scripts[name] = command;
+        addedScript = true;
+      }
+    }
+
+    if (!addedScript) {
+      return null;
+    }
+
+    return `${JSON.stringify(packageJson, null, 2)}\n`;
+  } catch {
+    return null;
+  }
 }

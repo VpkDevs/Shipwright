@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Shipwright — Turn GitHub Repos Into Live Products in Minutes",
+  title: "Shipwright",
   description:
-    "Analyze any GitHub repo and instantly generate Vercel configs, README files, landing pages, and .env templates — packaged as a pull request. $5/repo or $15/month unlimited.",
+    "Deployment readiness for solo builders with unfinished GitHub repos. Analyze a repo and generate Vercel configs, README files, landing pages, and .env templates as one pull request.",
   keywords: [
     "github deployment",
     "vercel config generator",
@@ -14,18 +14,18 @@ export const metadata: Metadata = {
     "indie dev tools",
   ],
   openGraph: {
-    title: "Shipwright — From GitHub to Deployed in 15 Minutes",
+    title: "Shipwright",
     description:
-      "AI-powered deployment configs, README, and landing page for your GitHub repos. One PR. Done.",
+      "Deployment readiness for solo builders with unfinished GitHub repos. One diagnosis, one generated PR.",
     siteName: "Shipwright",
     images: [{ url: "/og-image.png", width: 1200, height: 630 }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Shipwright — Turn GitHub Repos Into Live Products",
+    title: "Shipwright",
     description:
-      "AI-generated deployment configs, README, and landing page. One PR. Ship your dormant repos.",
+      "AI-generated deployment configs, README, and landing page. One PR for unfinished repos.",
     creator: "@vpkdevs",
   },
 };

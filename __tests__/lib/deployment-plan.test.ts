@@ -13,6 +13,7 @@ const baseAnalysis: RepoAnalysis = {
   envVarsDetected: ["DATABASE_URL", "NEXTAUTH_SECRET"],
   buildScript: "next build",
   startScript: "next start",
+  testScript: "vitest run",
   missingConfigs: [],
   deploymentIssues: [
     {

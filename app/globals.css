@@ -2,21 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+:root {
+  --paper: #f4f3ee;
+  --paper-raised: #fffefa;
+  --ink: #181a1f;
+  --ink-muted: #59606b;
+  --line: #d8d3c7;
+  --line-strong: #b8b0a1;
+  --steel: #26353a;
+  --steel-2: #31474d;
+  --accent: #24515a;
+  --accent-strong: #163b42;
+  --blocker: #b42318;
+  --warning: #b54708;
+  --success: #067647;
+  --info: #2f5f98;
+  --code-bg: #11171a;
+  --code-fg: #d7e2df;
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  background-color: #0a0e27;
-  color: #e0e0e0;
+  background:
+    linear-gradient(90deg, rgb(24 26 31 / 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(24 26 31 / 0.035) 1px, transparent 1px), var(--paper);
+  background-size: 32px 32px;
+  color: var(--ink);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    "IBM Plex Sans", Aptos, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.6;
 }
 
@@ -26,18 +42,73 @@ main {
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50;
+    background-color: var(--accent);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--accent-strong);
   }
 
   .btn-secondary {
-    @apply px-4 py-2 bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-600 transition-colors;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-colors;
+    border-color: var(--line-strong);
+    color: var(--ink);
+    background-color: rgb(255 254 250 / 0.68);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--paper-raised);
   }
 
   .card {
-    @apply bg-slate-800 rounded-lg p-4 border border-slate-700;
+    @apply rounded-md border p-4;
+    border-color: var(--line);
+    background-color: var(--paper-raised);
+  }
+
+  .work-surface {
+    @apply rounded-md border;
+    border-color: var(--line);
+    background-color: var(--paper-raised);
+  }
+
+  .section-label {
+    @apply text-xs font-semibold uppercase;
+    color: var(--ink-muted);
+  }
+
+  .text-muted {
+    color: var(--ink-muted);
+  }
+
+  .code-panel {
+    @apply rounded-md p-3 text-xs;
+    background-color: var(--code-bg);
+    color: var(--code-fg);
   }
 
   .input-field {
-    @apply w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+    @apply w-full rounded-md border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2;
+    border-color: var(--line-strong);
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    --tw-ring-color: rgb(36 81 90 / 0.22);
+  }
+
+  .severity-blocker {
+    color: var(--blocker);
+  }
+
+  .severity-warning {
+    color: var(--warning);
+  }
+
+  .severity-info {
+    color: var(--info);
+  }
+
+  .severity-success {
+    color: var(--success);
   }
 }

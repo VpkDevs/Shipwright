@@ -233,6 +233,7 @@ Analyze a repository.
   "envVarsDetected": ["DATABASE_URL", "API_KEY"],
   "buildScript": "npm run build",
   "startScript": "npm start",
+  "testScript": "npm test",
   "missingConfigs": [],
   "deploymentIssues": [
     {
@@ -267,6 +268,8 @@ Generate deployment configs and content.
 {
   "vercelJson": "{ ... }",
   "packageJsonScripts": { ... },
+  "packageJson": "{ ... }",
+  "ciWorkflow": "name: Shipwright deployment checks\n...",
   "envTemplate": "# Environment variables\n...",
   "readme": "# my-project\n...",
   "landingPage": "<html>...</html>",
