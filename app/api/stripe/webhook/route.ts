@@ -1,6 +1,6 @@
+import type Stripe from "stripe";
 import { createLogger } from "@/lib/logger";
 import { addShipCredits, stripe } from "@/lib/stripe";
-import type Stripe from "stripe";
 
 const logger = createLogger({ route: "POST /api/stripe/webhook" });
 

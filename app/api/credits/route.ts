@@ -1,3 +1,4 @@
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import {
@@ -8,7 +9,6 @@ import {
 } from "@/lib/stripe";
 import { withErrorHandler } from "@/lib/with-error-handler";
 import type { PaymentStatus } from "@/types";
-import { getServerSession } from "next-auth";
 
 const logger = createLogger({ route: "GET /api/credits" });
 
