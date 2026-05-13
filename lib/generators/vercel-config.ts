@@ -60,11 +60,17 @@ export function generatePackageJsonFile(
 
     const existingScripts = packageJson.scripts ?? {};
     packageJson.scripts = { ...existingScripts };
+    let addedScript = false;
     for (const [name, command] of Object.entries(generatedScripts)) {
       // Shipwright should add missing scripts without clobbering project-specific commands.
       if (!(name in packageJson.scripts)) {
         packageJson.scripts[name] = command;
+        addedScript = true;
       }
+    }
+
+    if (!addedScript) {
+      return null;
     }
 
     return `${JSON.stringify(packageJson, null, 2)}\n`;

@@ -97,8 +97,7 @@ describe("vercel config generators", () => {
       }
     );
 
-    expect(patched).toContain('"build": "custom build"');
-    expect(patched).not.toContain('"build": "next build"');
+    expect(patched).toBeNull();
   });
 
   it("does not assume Vite scripts for generic React projects", () => {

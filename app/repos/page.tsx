@@ -166,9 +166,14 @@ function ReposNav() {
         <Link href="/" className="text-xl font-semibold">
           Shipwright
         </Link>
-        <a href="/api/auth/signout" className="btn-secondary">
-          Sign out
-        </a>
+        <div className="flex items-center gap-2">
+          <Link href="/pricing" className="btn-secondary">
+            Pricing
+          </Link>
+          <a href="/api/auth/signout" className="btn-secondary">
+            Sign out
+          </a>
+        </div>
       </div>
     </nav>
   );

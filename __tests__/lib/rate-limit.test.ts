@@ -58,6 +58,21 @@ describe("Rate Limiting", () => {
     expect(results[10].retryAfter).toBeGreaterThan(0);
   });
 
+  it("warns in production when falling back to in-memory rate limiting", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubEnv("NODE_ENV", "production");
+    const { checkRateLimit } = await import("@/lib/rate-limit");
+
+    await checkRateLimit("user-789", "/api/analyze");
+    await checkRateLimit("user-789", "/api/analyze");
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Upstash Redis is not configured; using in-memory rate limiting for this process."
+    );
+    warn.mockRestore();
+  });
+
   it("returns success when limit not exceeded", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "token");

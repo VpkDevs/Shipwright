@@ -19,5 +19,7 @@ declare module "next-auth/jwt" {
     /** GitHub OAuth access token stored in the JWT */
     accessToken?: string;
     profile?: unknown;
+    /** GitHub user ID (numeric string) */
+    userId?: string;
   }
 }

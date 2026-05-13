@@ -11,6 +11,7 @@ const limits = {
 const ratelimits: Record<string, Ratelimit> = {};
 const localRateLimits = new Map<string, { count: number; resetAt: number }>();
 let redis: Redis | null = null;
+let warnedAboutLocalFallback = false;
 
 function getLimitConfig(route: string) {
   return (
@@ -111,6 +112,12 @@ export async function checkRateLimit(userId: string, route: string): Promise<Rat
   const ratelimit = getRateLimit(route);
 
   if (!ratelimit) {
+    if (process.env.NODE_ENV === "production" && !warnedAboutLocalFallback) {
+      console.warn(
+        "Upstash Redis is not configured; using in-memory rate limiting for this process."
+      );
+      warnedAboutLocalFallback = true;
+    }
     return checkLocalRateLimit(userId, route);
   }
 

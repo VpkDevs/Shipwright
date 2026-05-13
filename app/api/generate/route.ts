@@ -16,6 +16,12 @@ import {
 } from "@/lib/generators/vercel-config";
 import { GitHubClient } from "@/lib/github";
 import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  consumeShipCredit,
+  getOrCreateCustomer,
+  getShipCredits,
+  hasActiveProSubscription,
+} from "@/lib/stripe";
 import { withErrorHandler } from "@/lib/with-error-handler";
 import { eq } from "drizzle-orm";
 import { getServerSession } from "next-auth";
@@ -42,6 +48,27 @@ export const POST = withErrorHandler(async (request: Request) => {
   const rateLimitResult = await checkRateLimit(session.user.email, "/api/generate");
   if (!rateLimitResult.success) {
     throw new RateLimitError(rateLimitResult.retryAfter || 60);
+  }
+
+  // Payment gate — require credits or active Pro/Team subscription
+  const customerId = await getOrCreateCustomer(
+    session.user.email,
+    session.user.name || session.user.email
+  );
+  const [hasPro, credits] = await Promise.all([
+    hasActiveProSubscription(customerId),
+    getShipCredits(customerId),
+  ]);
+
+  if (!hasPro && credits <= 0) {
+    return Response.json(
+      {
+        error: "Payment required",
+        message: "You need a Ship Credit or Pro subscription to generate content.",
+        upgradeUrl: "/pricing",
+      },
+      { status: 402 }
+    );
   }
 
   const body = await request.json();
@@ -103,6 +130,11 @@ export const POST = withErrorHandler(async (request: Request) => {
       generated?.landingPageCopy || generateLandingPage(owner, repo, analysis, description),
     deploymentPlan: generateDeploymentPlan(owner, repo, analysis, description),
   };
+
+  // Consume one credit if user paid per-generation (not on Pro)
+  if (!hasPro && credits > 0) {
+    await consumeShipCredit(customerId);
+  }
 
   return new Response(JSON.stringify(finalGenerated), {
     status: 200,
