@@ -1,9 +1,9 @@
 "use client";
 
-import type { DeploymentIssue, GeneratedContent, RepoAnalysis } from "@/types";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import type { DeploymentIssue, GeneratedContent, RepoAnalysis } from "@/types";
 
 interface PRResult {
   url: string;

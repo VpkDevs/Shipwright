@@ -30,7 +30,7 @@ Shipwright is a deployment doctor for GitHub repositories. It analyzes what your
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Bun (installed globally)
 - GitHub account and OAuth app credentials
 

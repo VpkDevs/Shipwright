@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -23,9 +26,6 @@ import {
   hasActiveProSubscription,
 } from "@/lib/stripe";
 import { withErrorHandler } from "@/lib/with-error-handler";
-import { eq } from "drizzle-orm";
-import { getServerSession } from "next-auth";
-import { z } from "zod";
 
 const generateSchema = z.object({
   owner: z.string().min(1),

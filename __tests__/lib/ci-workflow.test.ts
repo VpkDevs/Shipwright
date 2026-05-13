@@ -1,6 +1,6 @@
+import { describe, expect, it } from "vitest";
 import { generateCiWorkflow } from "@/lib/generators/ci-workflow";
 import type { RepoAnalysis } from "@/types";
-import { describe, expect, it } from "vitest";
 
 const baseAnalysis: RepoAnalysis = {
   framework: "Next.js",

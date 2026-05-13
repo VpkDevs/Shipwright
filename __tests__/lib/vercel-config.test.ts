@@ -1,9 +1,9 @@
+import { describe, expect, it } from "vitest";
 import {
   generatePackageJsonFile,
   generatePackageJsonScripts,
 } from "@/lib/generators/vercel-config";
 import type { RepoAnalysis } from "@/types";
-import { describe, expect, it } from "vitest";
 
 const baseAnalysis: RepoAnalysis = {
   framework: "Next.js",

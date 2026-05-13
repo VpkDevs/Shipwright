@@ -1,9 +1,9 @@
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { RateLimitError, ValidationError } from "@/lib/errors";
 import { GitHubClient } from "@/lib/github";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withErrorHandler } from "@/lib/with-error-handler";
-import { getServerSession } from "next-auth";
 
 export const GET = withErrorHandler(async () => {
   const session = await getServerSession(authOptions);
