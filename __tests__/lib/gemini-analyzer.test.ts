@@ -1,5 +1,5 @@
-import { enrichAnalysisWithGemini } from "@/lib/gemini-analyzer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { enrichAnalysisWithGemini } from "@/lib/gemini-analyzer";
 
 vi.mock("@google/generative-ai", () => ({
   GoogleGenerativeAI: vi.fn(function (this: any) {
