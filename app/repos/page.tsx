@@ -44,8 +44,8 @@ export default function ReposPage() {
 
   const filteredRepos = useMemo(() => {
     return repos.filter((repo) => {
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
       return (
         repo.name.toLowerCase().includes(q) ||
         (repo.description?.toLowerCase().includes(q) ?? false) ||
