@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -17,9 +20,6 @@ import {
   hasActiveProSubscription,
 } from "@/lib/stripe";
 import { withErrorHandler } from "@/lib/with-error-handler";
-import { eq } from "drizzle-orm";
-import { getServerSession } from "next-auth";
-import { z } from "zod";
 
 const generateSchema = z.object({
   owner: z.string().min(1),
@@ -45,7 +45,10 @@ export const POST = withErrorHandler(async (request: Request) => {
   }
 
   // Payment gate — require credits or active Pro/Team subscription
-  const customerId = await getOrCreateCustomer(session.user.email, session.user.name || session.user.email);
+  const customerId = await getOrCreateCustomer(
+    session.user.email,
+    session.user.name || session.user.email
+  );
   const [hasPro, credits] = await Promise.all([
     hasActiveProSubscription(customerId),
     getShipCredits(customerId),

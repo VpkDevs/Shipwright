@@ -1,5 +1,5 @@
-import { generateContentWithGemini } from "@/lib/gemini-generator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { generateContentWithGemini } from "@/lib/gemini-generator";
 
 vi.mock("@google/generative-ai", () => ({
   GoogleGenerativeAI: vi.fn(function (this: any) {

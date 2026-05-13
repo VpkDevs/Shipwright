@@ -1,5 +1,5 @@
-import { checkRateLimit } from "@/lib/rate-limit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 vi.mock("@upstash/ratelimit", () => {
   const mockRatelimit = vi.fn(function (this: any) {

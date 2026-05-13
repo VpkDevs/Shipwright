@@ -1,8 +1,8 @@
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { createLogger, generateRequestId } from "@/lib/logger";
 import { getOrCreateCustomer, stripe } from "@/lib/stripe";
 import { withErrorHandler } from "@/lib/with-error-handler";
-import { getServerSession } from "next-auth";
 
 export const POST = withErrorHandler(async (request: Request) => {
   const requestId = generateRequestId();

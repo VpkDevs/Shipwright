@@ -1,5 +1,5 @@
-import { RepoAnalyzer } from "@/lib/analyzer";
 import { describe, expect, it } from "vitest";
+import { RepoAnalyzer } from "@/lib/analyzer";
 
 describe("RepoAnalyzer env var extraction", () => {
   it("detects environment variables from common JavaScript runtime patterns", () => {
