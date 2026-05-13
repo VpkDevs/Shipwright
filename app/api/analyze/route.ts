@@ -1,3 +1,5 @@
+import { getServerSession } from "next-auth";
+import { z } from "zod";
 import { RepoAnalyzer } from "@/lib/analyzer";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -6,8 +8,6 @@ import { RateLimitError, ValidationError } from "@/lib/errors";
 import { enrichAnalysisWithGemini } from "@/lib/gemini-analyzer";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withErrorHandler } from "@/lib/with-error-handler";
-import { getServerSession } from "next-auth";
-import { z } from "zod";
 
 const analyzeSchema = z.object({
   owner: z.string().min(1),

@@ -1,6 +1,6 @@
+import { describe, expect, it } from "vitest";
 import { generateDeploymentPlan } from "@/lib/generators/deployment-plan";
 import type { RepoAnalysis } from "@/types";
-import { describe, expect, it } from "vitest";
 
 const baseAnalysis: RepoAnalysis = {
   framework: "Next.js",
